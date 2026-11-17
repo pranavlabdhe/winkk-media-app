@@ -104,14 +104,35 @@ export default async function DashboardPage() {
     .all() as RecentActivity[];
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold">{isOwner ? "Owner Dashboard" : "My Dashboard"}</h1>
-        <p className="text-sm text-zinc-600">
-          {isOwner
-            ? "Team workload, client delivery, and accountability at a glance. Click a teammate or a status card to drill in."
-            : `Welcome ${session.name}. Your tasks and activity are prioritised here.`}
-        </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#12143d] text-white">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-[#12143d]">
+              {isOwner ? "Agency Owner Command Center" : "Team Member Dashboard"}
+            </h1>
+          </div>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            {isOwner
+              ? "Comprehensive operational metrics, cross-client workload distribution, and team accountability at a glance."
+              : `Hello ${session.name}. Track your daily priorities and recent agency developments.`}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href="/tasks"
+            className="rounded-xl bg-[#ed8527] px-4 py-2 text-xs font-bold text-white shadow-md shadow-[#ed8527]/20 hover:bg-[#d97116] transition-all cursor-pointer"
+          >
+            + New Task
+          </Link>
+        </div>
       </div>
 
       <DashboardFilters
@@ -123,31 +144,68 @@ export default async function DashboardPage() {
         today={todayIso}
       />
 
-      <section className="rounded-lg border bg-white p-4">
-        <h2 className="mb-3 font-semibold">Recent unified activity</h2>
-        <ul className="space-y-2 text-sm">
+      {/* Unified Activity Stream */}
+      <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#12143d]" />
+            <h2 className="text-sm font-bold text-[#12143d]">
+              Recent Unified Agency Activity
+            </h2>
+          </div>
+          <span className="text-[11px] font-medium text-slate-400">
+            Real-time cross-module audit trail
+          </span>
+        </div>
+
+        <div className="space-y-2">
           {recentActivity.map((item) => (
-            <li key={item.id} className="rounded border p-2">
-              <span className="font-medium">{item.user_name || "System"}</span> · {item.summary}
-              <div className="text-zinc-500">
-                {item.entity_type === "task"
-                  ? "Task"
-                  : MODULE_LABELS[item.entity_type as keyof typeof MODULE_LABELS] ||
-                    item.entity_type}
-                {item.client_name ? ` · ${item.client_name}` : ""} · {item.created_at}
-                {item.task_id ? (
-                  <>
-                    {" · "}
-                    <Link href={`/tasks?task=${item.task_id}`} className="underline">
-                      view task
-                    </Link>
-                  </>
-                ) : null}
+            <div
+              key={item.id}
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl bg-slate-50/70 p-3 text-xs border border-slate-100"
+            >
+              <div className="flex items-start sm:items-center gap-2.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#12143d] text-white text-[10px] font-bold">
+                  {(item.user_name || "S").charAt(0)}
+                </div>
+                <div>
+                  <span className="font-bold text-slate-900">
+                    {item.user_name || "System"}:
+                  </span>{" "}
+                  <span className="text-slate-700">{item.summary}</span>
+                </div>
               </div>
-            </li>
+
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 shrink-0 pl-8 sm:pl-0">
+                <span className="rounded bg-white px-2 py-0.5 text-slate-600 border border-slate-200 font-medium">
+                  {item.entity_type === "task"
+                    ? "Task"
+                    : MODULE_LABELS[item.entity_type as keyof typeof MODULE_LABELS] ||
+                      item.entity_type}
+                </span>
+                {item.client_name && (
+                  <span className="font-medium text-slate-600">
+                    {item.client_name}
+                  </span>
+                )}
+                <span>•</span>
+                <span>{item.created_at}</span>
+                {item.task_id && (
+                  <Link
+                    href={`/tasks?task=${item.task_id}`}
+                    className="font-bold text-[#ed8527] hover:underline"
+                  >
+                    Task #{item.task_id} →
+                  </Link>
+                )}
+              </div>
+            </div>
           ))}
-          {!recentActivity.length && <li className="text-zinc-500">No activity yet.</li>}
-        </ul>
+
+          {!recentActivity.length && (
+            <p className="text-xs text-slate-400 italic">No activity recorded yet.</p>
+          )}
+        </div>
       </section>
     </div>
   );

@@ -54,7 +54,9 @@ export default async function FeedbackPage({
     params.push(focusId);
   } else {
     if (taskFilter) {
-      where.push("(f.task_id = ? OR f.id IN (SELECT feedback_id FROM feedback_tasks WHERE task_id = ?))");
+      where.push(
+        "(f.task_id = ? OR f.id IN (SELECT feedback_id FROM feedback_tasks WHERE task_id = ?))"
+      );
       params.push(taskFilter, taskFilter);
     } else if (clientFilter) {
       where.push("f.client_id = ?");
@@ -105,165 +107,429 @@ export default async function FeedbackPage({
 
   const focused = focusId ? feedbackRows[0] : null;
 
+  // KPI metrics
+  const totalCount = feedbackRows.length;
+  const openCount = feedbackRows.filter((f) =>
+    OPEN_FEEDBACK_STATUSES.includes(f.status)
+  ).length;
+  const resolvedCount = feedbackRows.filter(
+    (f) => f.status === "resolved" || f.status === "closed"
+  ).length;
+  const urgentCount = feedbackRows.filter(
+    (f) => (f.priority === "urgent" || f.priority === "high") && OPEN_FEEDBACK_STATUSES.includes(f.status)
+  ).length;
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Client Feedback & Review Tracking</h1>
-        <p className="text-sm">
-          Feedback is created from a client communication and then owns its own lifecycle. The
-          conversation stays unchanged while the feedback moves from New to Resolved.
-        </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#ed8527] text-white">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-[#12143d]">
+              Client Feedback & Review Tracker
+            </h1>
+          </div>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            Lifecycle tracking for client revisions, approvals, sentiment analysis, and follow-up work orders.
+          </p>
+        </div>
+
+        {/* KPI Chips */}
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-slate-700 shadow-2xs">
+            Total Logged: <span className="text-[#12143d] font-bold">{totalCount}</span>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-800">
+            Open / Active: <span className="font-bold">{openCount}</span>
+          </div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-800">
+            Resolved: <span className="font-bold">{resolvedCount}</span>
+          </div>
+          {urgentCount > 0 && (
+            <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-rose-700 font-bold flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+              High / Urgent: {urgentCount}
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Alerts */}
       {sp.error && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {sp.error}
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 flex items-center gap-2">
+          <svg className="h-4 w-4 shrink-0 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{sp.error}</span>
         </div>
       )}
       {sp.saved && (
-        <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-          Saved. The feedback and its linked work are up to date.
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-800 flex items-center gap-2">
+          <svg className="h-4 w-4 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Changes saved successfully. The feedback lifecycle and linked work records are updated.</span>
         </div>
       )}
+
+      {/* Focus Notices */}
       {focused && (
-        <div className="rounded border bg-white p-2 text-sm">
-          Showing feedback #{focused.id} with its originating communication.{" "}
-          <Link href="/feedback" className="underline">
-            Show all feedback
-          </Link>
-        </div>
-      )}
-      {taskFilter && !focused && (
-        <div className="rounded border bg-white p-2 text-sm">
-          Showing feedback linked to task #{taskFilter}.{" "}
-          <Link href="/feedback" className="underline">
-            Show all feedback
-          </Link>
-        </div>
-      )}
-
-      <form method="get" className="flex flex-wrap items-center gap-2 rounded-lg border bg-white p-3 text-sm">
-        <select name="client" defaultValue={sp.client || ""} className="rounded border px-2 py-1">
-          <option value="">All clients</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </select>
-        <select name="status" defaultValue={sp.status || ""} className="rounded border px-2 py-1">
-          <option value="">All statuses</option>
-          <option value="open">Open (needs attention)</option>
-          {FEEDBACK_STATUSES.map((status) => (
-            <option key={status.value} value={status.value}>
-              {status.label}
-            </option>
-          ))}
-        </select>
-        <button className="rounded border px-3 py-1">Apply filters</button>
-        <Link href="/feedback" className="rounded border px-3 py-1">
-          Clear
-        </Link>
-      </form>
-
-      <details className="rounded-lg border bg-white p-4" open={!feedbackRows.length}>
-        <summary className="cursor-pointer text-sm font-medium">
-          Log new feedback (creates the communication record too)
-        </summary>
-        <form action={quickLogFeedbackAction} className="mt-3 grid gap-2 md:grid-cols-4">
-          <select name="client_id" required defaultValue={clientFilter || ""} className="rounded border px-3 py-2">
-            <option value="">Client *</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-          <select name="channel" defaultValue="whatsapp" className="rounded border px-3 py-2">
-            {COMMUNICATION_CHANNELS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <input
-            name="executive_name"
-            defaultValue={session.name}
-            placeholder="Handled by *"
-            className="rounded border px-3 py-2"
-          />
-          <input name="whatsapp_group" placeholder="Group / participants" className="rounded border px-3 py-2" />
-          <label className="text-xs">
-            Client message at
-            <input name="client_message_at" type="datetime-local" className="mt-1 w-full rounded border px-3 py-2" />
-          </label>
-          <label className="text-xs">
-            Response at
-            <input name="response_at" type="datetime-local" className="mt-1 w-full rounded border px-3 py-2" />
-          </label>
-          <textarea
-            name="notes"
-            rows={2}
-            placeholder="Communication note (context for the conversation)"
-            className="rounded border px-3 py-2 md:col-span-2"
-          />
-
-          <input name="title" required placeholder="Feedback subject *" className="rounded border px-3 py-2 md:col-span-2" />
-          <select name="category" defaultValue="creative" className="rounded border px-3 py-2">
-            {FEEDBACK_CATEGORIES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select name="sentiment" defaultValue="neutral" className="rounded border px-3 py-2">
-            {FEEDBACK_SENTIMENTS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <textarea
-            name="description"
-            required
-            rows={2}
-            placeholder="What exactly did the client say? *"
-            className="rounded border px-3 py-2 md:col-span-4"
-          />
-          <select name="priority" defaultValue="medium" className="rounded border px-3 py-2">
-            {FEEDBACK_PRIORITIES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label} priority
-              </option>
-            ))}
-          </select>
-          <select name="assigned_to" defaultValue={session.id} className="rounded border px-3 py-2">
-            <option value="">Assign if action needed</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
-              </option>
-            ))}
-          </select>
-          <label className="text-xs">
-            Expected resolution
-            <input name="due_date" type="date" className="mt-1 w-full rounded border px-3 py-2" />
-          </label>
-          <div className="space-y-1 self-center text-xs">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" name="action_required" defaultChecked /> Action required
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" name="create_task" defaultChecked /> Create a follow-up task
-            </label>
+        <div className="flex items-center justify-between rounded-xl border border-[#ed8527]/30 bg-orange-50/60 px-4 py-3 text-xs sm:text-sm text-slate-800">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ed8527] text-white text-[10px] font-bold">
+              i
+            </span>
+            Viewing Feedback <span className="font-bold text-[#12143d]">#{focused.id}</span> and its original communication log.
           </div>
-          <button className="rounded bg-zinc-900 px-3 py-2 font-medium text-white md:col-span-4">
-            Log feedback and communication
-          </button>
+          <Link
+            href="/feedback"
+            className="rounded-lg bg-white border border-slate-200 px-3 py-1 text-xs font-semibold text-[#12143d] hover:bg-slate-50 shadow-2xs"
+          >
+            Show All Feedback
+          </Link>
+        </div>
+      )}
+
+      {taskFilter && !focused && (
+        <div className="flex items-center justify-between rounded-xl border border-[#ed8527]/30 bg-orange-50/60 px-4 py-3 text-xs sm:text-sm text-slate-800">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ed8527] text-white text-[10px] font-bold">
+              i
+            </span>
+            Filtering feedback connected to Task <span className="font-bold text-[#12143d]">#{taskFilter}</span>.
+          </div>
+          <Link
+            href="/feedback"
+            className="rounded-lg bg-white border border-slate-200 px-3 py-1 text-xs font-semibold text-[#12143d] hover:bg-slate-50 shadow-2xs"
+          >
+            Show All Feedback
+          </Link>
+        </div>
+      )}
+
+      {/* Filter Toolbar */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
+        <form method="get" className="flex flex-wrap items-end gap-3 text-xs">
+          <div className="w-full sm:w-56">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Client
+            </label>
+            <select
+              name="client"
+              defaultValue={sp.client || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#ed8527] focus:bg-white focus:outline-none"
+            >
+              <option value="">All Clients</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="w-full sm:w-56">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Lifecycle Status
+            </label>
+            <select
+              name="status"
+              defaultValue={sp.status || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#ed8527] focus:bg-white focus:outline-none"
+            >
+              <option value="">All Statuses</option>
+              <option value="open">⚡ Needs Action (Open)</option>
+              {FEEDBACK_STATUSES.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="submit"
+              className="rounded-xl bg-[#12143d] px-4 py-2 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer shadow-2xs"
+            >
+              Apply Filter
+            </button>
+            <Link
+              href="/feedback"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Reset
+            </Link>
+          </div>
+        </form>
+      </div>
+
+      {/* Log New Feedback Card (Collapsible) */}
+      <details
+        className="group rounded-2xl border border-slate-200/90 bg-white shadow-xs transition-all overflow-hidden"
+        open={!feedbackRows.length}
+      >
+        <summary className="cursor-pointer bg-slate-50/60 px-5 py-3.5 text-xs sm:text-sm font-bold text-[#12143d] flex items-center justify-between hover:bg-slate-100/60 transition-colors">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#ed8527]/10 text-[#ed8527]">
+              +
+            </span>
+            <span>Record New Client Feedback &amp; Source Conversation</span>
+          </div>
+          <span className="text-xs text-slate-400 group-open:rotate-180 transition-transform">
+            ▼
+          </span>
+        </summary>
+
+        <form action={quickLogFeedbackAction} className="p-5 space-y-4 border-t border-slate-100">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+            Part 1: Communication Origin
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Client <span className="text-rose-500">*</span>
+              </label>
+              <select
+                name="client_id"
+                required
+                defaultValue={clientFilter || ""}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              >
+                <option value="">Select Client *</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Channel
+              </label>
+              <select
+                name="channel"
+                defaultValue="whatsapp"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              >
+                {COMMUNICATION_CHANNELS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Handled by Executive <span className="text-rose-500">*</span>
+              </label>
+              <input
+                name="executive_name"
+                defaultValue={session.name}
+                required
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                WhatsApp Group / Participants
+              </label>
+              <input
+                name="whatsapp_group"
+                placeholder="e.g. Solhaus Marketing Core"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Client Message Timestamp
+              </label>
+              <input
+                name="client_message_at"
+                type="datetime-local"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Team Response Timestamp
+              </label>
+              <input
+                name="response_at"
+                type="datetime-local"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Communication Summary / Context
+            </label>
+            <textarea
+              name="notes"
+              rows={2}
+              placeholder="Background context of the conversation..."
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+            />
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+              Part 2: Feedback Classification &amp; Action Plan
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Feedback Subject <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  name="title"
+                  required
+                  placeholder="e.g. Menu post logo size adjustment requested"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Category
+                </label>
+                <select
+                  name="category"
+                  defaultValue="creative"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+                >
+                  {FEEDBACK_CATEGORIES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Client&apos;s Exact Feedback / Revision Notes <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                name="description"
+                required
+                rows={3}
+                placeholder="What exactly did the client say or ask for?"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              />
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Sentiment
+                </label>
+                <select
+                  name="sentiment"
+                  defaultValue="neutral"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+                >
+                  {FEEDBACK_SENTIMENTS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Priority
+                </label>
+                <select
+                  name="priority"
+                  defaultValue="medium"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+                >
+                  {FEEDBACK_PRIORITIES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label} Priority
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Assignee for Action
+                </label>
+                <select
+                  name="assigned_to"
+                  defaultValue={session.id}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+                >
+                  <option value="">Unassigned</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Expected Resolution Date
+                </label>
+                <input
+                  name="due_date"
+                  type="date"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-6 text-xs text-slate-700">
+              <label className="flex items-center gap-2 font-medium cursor-pointer">
+                <input type="checkbox" name="action_required" defaultChecked className="rounded text-[#ed8527]" />
+                Action required by team
+              </label>
+              <label className="flex items-center gap-2 font-medium cursor-pointer">
+                <input type="checkbox" name="create_task" defaultChecked className="rounded text-[#ed8527]" />
+                Automatically provision an execution task on the board
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-100">
+            <button
+              type="submit"
+              className="rounded-xl bg-[#ed8527] px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-[#ed8527]/20 transition-all hover:bg-[#d97116] hover:shadow-lg active:scale-[0.99] cursor-pointer"
+            >
+              + Log Feedback &amp; Conversation
+            </button>
+          </div>
         </form>
       </details>
 
-      <div className="space-y-3">
+      {/* Feedback Feed */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 px-1">
+          Feedback Records ({feedbackRows.length})
+        </h3>
+
         {feedbackRows.map((f) => {
           const canManage =
             session.role === "owner" ||
@@ -272,243 +538,385 @@ export default async function FeedbackPage({
             f.recorded_by === session.id;
           const tasks = tasksBy[f.id] || [];
 
+          // Badges config
+          const sentimentStyles = {
+            positive: "bg-emerald-50 text-emerald-800 border-emerald-200",
+            negative: "bg-rose-50 text-rose-800 border-rose-200 font-semibold",
+            suggestion: "bg-blue-50 text-blue-800 border-blue-200",
+            neutral: "bg-slate-100 text-slate-700 border-slate-200",
+          }[f.sentiment as "positive" | "negative" | "suggestion" | "neutral"] || "bg-slate-100 text-slate-700";
+
+          const priorityStyles = {
+            urgent: "bg-rose-50 text-rose-700 border-rose-300 font-bold",
+            high: "bg-amber-50 text-amber-800 border-amber-200 font-semibold",
+            medium: "bg-slate-100 text-slate-700 border-slate-200",
+            low: "bg-slate-50 text-slate-500 border-slate-200",
+          }[f.priority as "urgent" | "high" | "medium" | "low"] || "bg-slate-100 text-slate-700";
+
           return (
-            <article key={f.id} className="rounded-lg border bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <div className="text-lg font-semibold">
-                    {f.title || f.content?.slice(0, 80)}
+            <article
+              key={f.id}
+              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-all hover:border-slate-300"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="space-y-2 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-slate-400">
+                      #{f.id}
+                    </span>
+                    <h4 className="text-base font-bold text-slate-900">
+                      {f.title || f.content?.slice(0, 80)}
+                    </h4>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 border border-slate-200">
+                      {f.client_name}
+                    </span>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-1 text-xs">
-                    <span className="rounded bg-zinc-100 px-2 py-0.5">{f.client_name}</span>
-                    <span className="rounded bg-zinc-100 px-2 py-0.5">{feedbackStatusLabel(f.status)}</span>
-                    <span className="rounded bg-zinc-100 px-2 py-0.5">{feedbackCategoryLabel(f.category)}</span>
-                    <span className="rounded bg-zinc-100 px-2 py-0.5">{feedbackSentimentLabel(f.sentiment)}</span>
-                    <span className="rounded bg-zinc-100 px-2 py-0.5">{feedbackPriorityLabel(f.priority)} priority</span>
-                    <span className="rounded bg-zinc-100 px-2 py-0.5">
-                      {f.action_required ? "Action required" : "No action required"}
+
+                  {/* Metadata Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    <span className="rounded-md bg-slate-50 border border-slate-200 px-2 py-0.5 text-slate-700 font-medium">
+                      Status: <b className="text-slate-900">{feedbackStatusLabel(f.status)}</b>
+                    </span>
+                    <span className="rounded-md bg-slate-50 border border-slate-200 px-2 py-0.5 text-slate-700">
+                      {feedbackCategoryLabel(f.category)}
+                    </span>
+                    <span className={`rounded-md border px-2 py-0.5 ${sentimentStyles}`}>
+                      {feedbackSentimentLabel(f.sentiment)}
+                    </span>
+                    <span className={`rounded-md border px-2 py-0.5 ${priorityStyles}`}>
+                      {feedbackPriorityLabel(f.priority)} Priority
                     </span>
                     {f.post_title && (
-                      <span className="rounded bg-zinc-100 px-2 py-0.5">Post: {f.post_title}</span>
+                      <span className="rounded-md bg-purple-50 text-purple-800 border border-purple-200 px-2 py-0.5 font-medium">
+                        Post: {f.post_title}
+                      </span>
                     )}
                   </div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm">{f.content}</p>
-                  <div className="mt-1 text-xs text-zinc-600">
-                    {f.assignee_name ? `Assigned to ${f.assignee_name}` : "Unassigned"}
-                    {f.due_date ? ` · expected ${f.due_date}` : ""}
-                    {f.resolved_at ? ` · resolved ${f.resolved_at}` : ""}
+
+                  <p className="mt-2 text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50/80 rounded-xl p-3 border border-slate-100">
+                    {f.content}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-x-4 text-xs text-slate-500 pt-1">
+                    <div>
+                      Assignee:{" "}
+                      <span className="font-semibold text-slate-800">
+                        {f.assignee_name || "Unassigned"}
+                      </span>
+                    </div>
+                    {f.due_date && <div>Resolution Due: <span className="font-semibold text-slate-800">{f.due_date}</span></div>}
+                    {f.resolved_at && (
+                      <div className="text-emerald-700 font-medium">
+                        ✓ Resolved on {f.resolved_at}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-3 rounded border bg-zinc-50 p-2 text-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Originating communication
+              {/* Originating Communication info */}
+              <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-xs text-slate-700">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Source Communication
                 </div>
                 {f.communication_id ? (
-                  <>
-                    <div className="mt-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
                       <Link
                         href={`/communications?communication=${f.communication_id}`}
-                        className="font-medium underline"
+                        className="font-bold text-[#12143d] hover:text-[#ed8527] transition-colors"
                       >
                         Communication #{f.communication_id}
                       </Link>{" "}
-                      · {communicationChannelLabel(f.channel)} ·{" "}
-                      {f.client_message_at || f.communication_created_at}
+                      via <span className="font-medium text-slate-800">{communicationChannelLabel(f.channel)}</span>
+                      {f.whatsapp_group ? ` (${f.whatsapp_group})` : ""}
                     </div>
-                    <div className="text-xs text-zinc-600">
-                      Logged by {f.recorded_by_name || "team"}
-                      {f.recorded_by_title ? ` (${f.recorded_by_title})` : ""} · handled by{" "}
-                      {f.executive_name}
-                      {f.whatsapp_group ? ` · ${f.whatsapp_group}` : ""}
+                    <div className="text-slate-400">
+                      Logged by {f.recorded_by_name || "Team"} · Handled by {f.executive_name}
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <div className="mt-1 text-xs text-zinc-600">
-                    This feedback came from the task board, not a logged conversation.
+                  <div className="text-slate-400 italic">
+                    Logged directly without an external communication record.
                   </div>
                 )}
               </div>
 
-              <div className="mt-3">
-                <div className="text-sm font-medium">Linked tasks</div>
-                <ul className="mt-1 space-y-1 text-sm">
+              {/* Linked Tasks */}
+              <div className="mt-3 rounded-xl border border-slate-100 bg-white p-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-2">
+                  <span>Linked Execution Tasks ({tasks.length})</span>
+                </div>
+                <div className="space-y-1.5 text-xs">
                   {tasks.map((task) => (
-                    <li key={task.id} className="flex flex-wrap items-center gap-2">
-                      <Link href={`/tasks?task=${task.id}`} className="underline">
-                        {task.title}
+                    <div
+                      key={task.id}
+                      className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 text-slate-700"
+                    >
+                      <Link
+                        href={`/tasks?task=${task.id}`}
+                        className="font-semibold text-[#12143d] hover:text-[#ed8527]"
+                      >
+                        #{task.id} {task.title}
                       </Link>
-                      <span className="text-xs text-zinc-600">
-                        {task.assignee_name || "Unassigned"} · {task.status}
-                        {task.due_date ? ` · due ${task.due_date}` : ""}
-                      </span>
-                    </li>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                        <span>{task.assignee_name || "Unassigned"}</span>
+                        <span>·</span>
+                        <span className="font-medium text-slate-800">{task.status}</span>
+                        {task.due_date && <span>Due {task.due_date}</span>}
+                      </div>
+                    </div>
                   ))}
                   {!tasks.length && (
-                    <li className="text-xs text-zinc-500">
-                      No task yet. Add one when this feedback needs work from someone.
-                    </li>
+                    <div className="text-slate-400 italic text-xs">
+                      No linked execution task.
+                    </div>
                   )}
-                </ul>
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs underline">Add a follow-up task</summary>
-                  <form action={createFeedbackTaskAction} className="mt-2 flex flex-wrap items-end gap-2">
+                </div>
+
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer font-semibold text-[#ed8527] hover:underline">
+                    + Provision Follow-up Task for this Feedback
+                  </summary>
+                  <form
+                    action={createFeedbackTaskAction}
+                    className="mt-2 grid gap-2 sm:grid-cols-4 bg-slate-50 p-3 rounded-xl border border-slate-200/80"
+                  >
                     <input type="hidden" name="feedback_id" value={f.id} />
-                    <select name="assigned_to" required defaultValue={f.assigned_to || ""} className="rounded border px-2 py-1 text-sm">
-                      <option value="">Assign to *</option>
+                    <select
+                      name="assigned_to"
+                      required
+                      defaultValue={f.assigned_to || ""}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800"
+                    >
+                      <option value="">Select Assignee *</option>
                       {users.map((user) => (
                         <option key={user.id} value={user.id}>
                           {user.name}
                         </option>
                       ))}
                     </select>
-                    <input name="due_date" type="date" className="rounded border px-2 py-1 text-sm" />
-                    <select name="priority" defaultValue={f.priority || "medium"} className="rounded border px-2 py-1 text-sm">
+                    <input
+                      name="due_date"
+                      type="date"
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800"
+                    />
+                    <select
+                      name="priority"
+                      defaultValue={f.priority || "medium"}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800"
+                    >
                       {FEEDBACK_PRIORITIES.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
                       ))}
                     </select>
-                    <button className="rounded border px-3 py-1 text-sm">Create task</button>
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-[#12143d] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer"
+                    >
+                      Create Task
+                    </button>
                   </form>
                 </details>
               </div>
 
-              {canManage ? (
-                <form
-                  action={updateFeedbackAction}
-                  className="mt-3 grid gap-2 rounded border p-2 md:grid-cols-6"
-                >
-                  <input type="hidden" name="id" value={f.id} />
-                  <label className="text-xs md:col-span-3">
-                    Subject
-                    <input
-                      name="title"
-                      defaultValue={f.title || ""}
-                      className="mt-1 w-full rounded border px-2 py-1"
-                    />
-                  </label>
-                  <label className="text-xs">
-                    Category
-                    <select name="category" defaultValue={f.category || "other"} className="mt-1 w-full rounded border px-2 py-1">
-                      {FEEDBACK_CATEGORIES.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs">
-                    Sentiment
-                    <select name="sentiment" defaultValue={f.sentiment || "neutral"} className="mt-1 w-full rounded border px-2 py-1">
-                      {FEEDBACK_SENTIMENTS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs md:col-span-6">
-                    What the feedback is about
-                    <textarea
-                      name="description"
-                      rows={2}
-                      defaultValue={f.content || ""}
-                      className="mt-1 w-full rounded border px-2 py-1"
-                    />
-                  </label>
-                  <label className="text-xs">
-                    Status
-                    <select name="status" defaultValue={f.status} className="mt-1 w-full rounded border px-2 py-1">
-                      {FEEDBACK_STATUSES.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs">
-                    Priority
-                    <select name="priority" defaultValue={f.priority || "medium"} className="mt-1 w-full rounded border px-2 py-1">
-                      {FEEDBACK_PRIORITIES.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs">
-                    Assignee
-                    <select name="assigned_to" defaultValue={f.assigned_to || ""} className="mt-1 w-full rounded border px-2 py-1">
-                      <option value="">Unassigned</option>
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs">
-                    Expected resolution
-                    <input
-                      name="due_date"
-                      type="date"
-                      defaultValue={f.due_date || ""}
-                      className="mt-1 w-full rounded border px-2 py-1"
-                    />
-                  </label>
-                  <label className="text-xs md:col-span-2">
-                    Action taken
-                    <input
-                      name="action_taken"
-                      defaultValue={f.action_taken || ""}
-                      placeholder="What the team did"
-                      className="mt-1 w-full rounded border px-2 py-1"
-                    />
-                  </label>
-                  <button className="rounded border px-3 py-1 text-sm md:col-span-6 md:w-max">
-                    Save feedback
-                  </button>
-                </form>
-              ) : (
-                <p className="mt-3 text-xs text-zinc-500">
-                  Only the owner or the assigned employee can change this feedback.
-                </p>
+              {/* Edit Feedback Form */}
+              {canManage && (
+                <details className="mt-3 text-xs">
+                  <summary className="cursor-pointer text-slate-500 font-medium hover:text-[#12143d]">
+                    ⚙️ Edit Feedback Lifecycle &amp; Resolution
+                  </summary>
+                  <form
+                    action={updateFeedbackAction}
+                    className="mt-2 grid gap-2.5 rounded-xl border border-slate-200 bg-slate-50/50 p-4 sm:grid-cols-2 lg:grid-cols-6"
+                  >
+                    <input type="hidden" name="id" value={f.id} />
+                    <div className="lg:col-span-3">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Subject
+                      </label>
+                      <input
+                        name="title"
+                        defaultValue={f.title || ""}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Category
+                      </label>
+                      <select
+                        name="category"
+                        defaultValue={f.category || "other"}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                      >
+                        {FEEDBACK_CATEGORIES.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Sentiment
+                      </label>
+                      <select
+                        name="sentiment"
+                        defaultValue={f.sentiment || "neutral"}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                      >
+                        {FEEDBACK_SENTIMENTS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Status
+                      </label>
+                      <select
+                        name="status"
+                        defaultValue={f.status}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 font-medium"
+                      >
+                        {FEEDBACK_STATUSES.map((status) => (
+                          <option key={status.value} value={status.value}>
+                            {status.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="lg:col-span-6">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Description / Content
+                      </label>
+                      <textarea
+                        name="description"
+                        rows={2}
+                        defaultValue={f.content || ""}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+                      />
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Assignee
+                      </label>
+                      <select
+                        name="assigned_to"
+                        defaultValue={f.assigned_to || ""}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                      >
+                        <option value="">Unassigned</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Expected Due Date
+                      </label>
+                      <input
+                        name="due_date"
+                        type="date"
+                        defaultValue={f.due_date || ""}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                      />
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                        Action Taken Summary
+                      </label>
+                      <input
+                        name="action_taken"
+                        defaultValue={f.action_taken || ""}
+                        placeholder="Resolution steps executed..."
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+                      />
+                    </div>
+
+                    <div className="flex items-end">
+                      <button
+                        type="submit"
+                        className="w-full rounded-lg bg-[#12143d] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer"
+                      >
+                        Save Feedback
+                      </button>
+                    </div>
+                  </form>
+                </details>
               )}
 
-              <div className="mt-3 border-t pt-2">
-                <div className="text-sm font-medium">History of updates & developments</div>
-                <ul className="mt-1 space-y-1 text-sm text-zinc-700">
+              {/* Progress note updates */}
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Update Log &amp; Progress Notes
+                </div>
+                <div className="space-y-1 text-xs text-slate-700">
                   {(updatesBy[f.id] || []).map((update) => (
-                    <li key={update.id}>
-                      • {update.note}{" "}
-                      <span className="text-xs text-zinc-500">
-                        ({update.user_name || "team"} · {update.created_at})
+                    <div
+                      key={update.id}
+                      className="flex items-start gap-2 rounded-lg bg-slate-50 p-2"
+                    >
+                      <span className="font-semibold text-slate-900">
+                        {update.user_name || "Team"}:
                       </span>
-                    </li>
+                      <span className="flex-1">{update.note}</span>
+                      <span className="text-[10px] text-slate-400">
+                        {update.created_at}
+                      </span>
+                    </div>
                   ))}
                   {!(updatesBy[f.id] || []).length && (
-                    <li className="text-zinc-500">No updates yet.</li>
+                    <div className="text-slate-400 italic text-xs">
+                      No progress updates logged yet.
+                    </div>
                   )}
-                </ul>
-                <form action={addFeedbackNoteAction} className="mt-2 flex gap-2">
+                </div>
+
+                <form action={addFeedbackNoteAction} className="mt-2.5 flex gap-2">
                   <input type="hidden" name="feedback_id" value={f.id} />
                   <input
                     name="note"
                     required
-                    placeholder="Add update/development note"
-                    className="flex-1 rounded border px-2 py-1 text-sm"
+                    placeholder="Add progress update, client approval note, or blocker..."
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
                   />
-                  <button className="rounded border px-2 py-1 text-sm">Add note</button>
+                  <button
+                    type="submit"
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer shrink-0"
+                  >
+                    Add Note
+                  </button>
                 </form>
               </div>
             </article>
           );
         })}
+
         {!feedbackRows.length && (
-          <div className="rounded-lg border bg-white p-4 text-zinc-500">No feedback yet.</div>
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+            <h4 className="text-sm font-semibold text-slate-800">
+              No feedback items found
+            </h4>
+            <p className="mt-1 text-xs text-slate-500">
+              All client feedback is caught up or no items match your active filter.
+            </p>
+          </div>
         )}
       </div>
     </div>

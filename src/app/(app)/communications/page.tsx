@@ -85,43 +85,147 @@ export default async function CommunicationsPage({
 
   const focused = focusId ? rows[0] : null;
 
+  const totalCount = rows.length;
+  const delayedCount = rows.filter(
+    (r) => r.status === "delayed" || r.status === "missed"
+  ).length;
+  const feedbackCommsCount = rows.filter(
+    (r) => r.communication_type === "feedback"
+  ).length;
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Client Communication Tracking</h1>
-        <p className="text-sm">
-          Log every client interaction once. Choose <b>General Communication</b> for a conversation,
-          or <b>Communication Containing Feedback</b> to create the feedback records in the same step.
-        </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#12143d] text-white">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-[#12143d]">
+              Client Communication &amp; SLA Tracking
+            </h1>
+          </div>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            Monitor WhatsApp groups, calls, emails, and response SLAs across all active restaurant accounts.
+          </p>
+        </div>
+
+        {/* KPI Chips */}
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-slate-700 shadow-2xs">
+            Total Logs: <span className="text-[#12143d] font-bold">{totalCount}</span>
+          </div>
+          <div className="rounded-xl border border-purple-200 bg-purple-50 px-3 py-1.5 text-purple-800">
+            Feedback Threads: <span className="font-bold">{feedbackCommsCount}</span>
+          </div>
+          {delayedCount > 0 ? (
+            <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-rose-700 font-bold flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+              Delayed / Missed: {delayedCount}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-800">
+              SLA Compliant: 100%
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Alerts */}
       {sp.error && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {sp.error}
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 flex items-center gap-2">
+          <svg className="h-4 w-4 shrink-0 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{sp.error}</span>
         </div>
       )}
       {sp.saved && (
-        <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-          Saved. The communication and its feedback are up to date.
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-800 flex items-center gap-2">
+          <svg className="h-4 w-4 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Saved. Communication log and feedback references updated.</span>
         </div>
       )}
+
+      {/* Focus Notices */}
       {focused && (
-        <div className="rounded border bg-white p-2 text-sm">
-          Showing communication #{focused.id} and its feedback.{" "}
-          <Link href="/communications" className="underline">
-            Show all communications
-          </Link>
-        </div>
-      )}
-      {taskFilter && !focused && (
-        <div className="rounded border bg-white p-2 text-sm">
-          Showing communication linked to task #{taskFilter}.{" "}
-          <Link href="/communications" className="underline">
-            Show all communications
+        <div className="flex items-center justify-between rounded-xl border border-[#ed8527]/30 bg-orange-50/60 px-4 py-3 text-xs sm:text-sm text-slate-800">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ed8527] text-white text-[10px] font-bold">
+              i
+            </span>
+            Isolated View: Communication <span className="font-bold text-[#12143d]">#{focused.id}</span>
+          </div>
+          <Link
+            href="/communications"
+            className="rounded-lg bg-white border border-slate-200 px-3 py-1 text-xs font-semibold text-[#12143d] hover:bg-slate-50 shadow-2xs"
+          >
+            Show All Communications
           </Link>
         </div>
       )}
 
+      {taskFilter && !focused && (
+        <div className="flex items-center justify-between rounded-xl border border-[#ed8527]/30 bg-orange-50/60 px-4 py-3 text-xs sm:text-sm text-slate-800">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ed8527] text-white text-[10px] font-bold">
+              i
+            </span>
+            Filtering communications for Task <span className="font-bold text-[#12143d]">#{taskFilter}</span>.
+          </div>
+          <Link
+            href="/communications"
+            className="rounded-lg bg-white border border-slate-200 px-3 py-1 text-xs font-semibold text-[#12143d] hover:bg-slate-50 shadow-2xs"
+          >
+            Show All Communications
+          </Link>
+        </div>
+      )}
+
+      {/* Filter Toolbar */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
+        <form method="get" className="flex flex-wrap items-end gap-3 text-xs">
+          <div className="w-full sm:w-64">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Filter by Client
+            </label>
+            <select
+              name="client"
+              defaultValue={sp.client || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#ed8527] focus:bg-white focus:outline-none"
+            >
+              <option value="">All Clients</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="submit"
+              className="rounded-xl bg-[#12143d] px-4 py-2 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer shadow-2xs"
+            >
+              Apply Filter
+            </button>
+            <Link
+              href="/communications"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Clear
+            </Link>
+          </div>
+        </form>
+      </div>
+
+      {/* Communication Log Form */}
       <CommunicationForm
         clients={clients}
         users={users}
@@ -130,48 +234,41 @@ export default async function CommunicationsPage({
         currentUserId={session.id}
       />
 
-      <div className="overflow-x-auto rounded-lg border bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-zinc-50 text-left">
-            <tr>
-              <th className="p-2">Client</th>
-              <th className="p-2">Executive</th>
-              <th className="p-2">Client msg</th>
-              <th className="p-2">Response</th>
-              <th className="p-2">Status</th>
-              <th className="p-2">Type</th>
-              <th className="p-2">Linked task</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const feedback = feedbackByCommunication[r.id] || [];
+      {/* Communications Feed */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 px-1">
+          Interaction History ({rows.length})
+        </h3>
 
-              return (
-                <CommunicationRow
-                  key={r.id}
-                  row={r}
-                  feedback={feedback}
-                  users={users}
-                  viewer={{ id: session.id, role: session.role }}
-                />
-              );
-            })}
-            {!rows.length && (
-              <tr>
-                <td className="p-4 text-zinc-500" colSpan={7}>
-                  No communication logs yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {rows.map((r) => {
+          const feedback = feedbackByCommunication[r.id] || [];
+          return (
+            <CommunicationCard
+              key={r.id}
+              row={r}
+              feedback={feedback}
+              users={users}
+              viewer={{ id: session.id, role: session.role }}
+            />
+          );
+        })}
+
+        {!rows.length && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+            <h4 className="text-sm font-semibold text-slate-800">
+              No communication logs found
+            </h4>
+            <p className="mt-1 text-xs text-slate-500">
+              Record your first WhatsApp, call, or email interaction using the form above.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function CommunicationRow({
+function CommunicationCard({
   row,
   feedback,
   users,
@@ -182,291 +279,378 @@ function CommunicationRow({
   users: any[];
   viewer: { id: number; role: "owner" | "employee" };
 }) {
-  const whatsappGroup = row.whatsapp_group && row.whatsapp_group !== row.client_name
-    ? row.whatsapp_group
-    : null;
+  const statusConfig: Record<string, { label: string; badge: string; dot: string }> = {
+    responded: {
+      label: "Responded",
+      badge: "bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold",
+      dot: "bg-emerald-500",
+    },
+    pending: {
+      label: "Pending Response",
+      badge: "bg-blue-50 text-blue-800 border-blue-200 font-semibold",
+      dot: "bg-blue-500",
+    },
+    delayed: {
+      label: "Delayed SLA",
+      badge: "bg-amber-50 text-amber-800 border-amber-300 font-bold",
+      dot: "bg-amber-500",
+    },
+    missed: {
+      label: "Missed",
+      badge: "bg-rose-50 text-rose-800 border-rose-300 font-bold",
+      dot: "bg-rose-500",
+    },
+  };
+
+  const statusStyle = statusConfig[row.status] || {
+    label: row.status,
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
+    dot: "bg-slate-400",
+  };
 
   return (
-    <>
-      <tr className="border-t align-top">
-        <td className="p-2">
-          {row.client_name}
-          <div className="text-xs text-zinc-500">{whatsappGroup || ""}</div>
-        </td>
-        <td className="p-2">{row.executive_name}</td>
-        <td className="p-2">{row.client_message_at || "-"}</td>
-        <td className="p-2">{row.response_at || "-"}</td>
-        <td className="p-2 font-medium">{row.status}</td>
-        <td className="p-2">
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-all hover:border-slate-300 space-y-4">
+      {/* Top Meta Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-mono font-bold text-slate-400">
+              #{row.id}
+            </span>
+            <Link
+              href={`/clients/${row.client_id}`}
+              className="text-base font-bold text-[#12143d] hover:text-[#ed8527] transition-colors"
+            >
+              {row.client_name}
+            </Link>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 border border-slate-200">
+              {communicationChannelLabel(row.channel)}
+            </span>
+            {row.whatsapp_group && (
+              <span className="text-xs text-slate-500">
+                · {row.whatsapp_group}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
+            <div>
+              Handled by: <span className="font-semibold text-slate-800">{row.executive_name}</span>
+            </div>
+            <span>•</span>
+            <div>
+              Logged by: <span className="text-slate-700">{row.recorded_by_name || "Team"}</span>
+            </div>
+            <span>•</span>
+            <div>{row.created_at}</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
           <span
-            className={`rounded border px-2 py-0.5 text-xs ${
-              row.communication_type === "feedback" ? "border-amber-300 bg-amber-50" : "bg-white"
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${statusStyle.badge}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dot}`} />
+            {statusStyle.label}
+          </span>
+          <span
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+              row.communication_type === "feedback"
+                ? "bg-amber-50 text-amber-800 border-amber-200"
+                : "bg-slate-50 text-slate-700 border-slate-200"
             }`}
           >
             {communicationTypeLabel(row.communication_type)}
           </span>
-          {feedback.length > 0 && (
-            <div className="mt-1 text-xs text-zinc-600">
-              {feedback.length} feedback item{feedback.length === 1 ? "" : "s"}
-            </div>
-          )}
-        </td>
-        <td className="p-2">
-          {row.linked_task_id ? (
-            <div className="text-xs">
-              <Link href={`/tasks?task=${row.linked_task_id}`} className="underline">
-                {row.linked_task_title}
-              </Link>
-              <div>
-                {row.linked_task_assignee || "Unassigned"} · {row.linked_task_status}
-              </div>
-              <div>Due: {row.linked_task_due || "-"}</div>
-            </div>
-          ) : (
-            <span className="text-xs">No linked task</span>
-          )}
-        </td>
-      </tr>
+        </div>
+      </div>
 
-      <tr>
-        <td colSpan={7} className="px-2 pb-3">
-          <div className="rounded border bg-zinc-50 p-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
-              <span>
-                {communicationChannelLabel(row.channel)} · logged by{" "}
-                {row.recorded_by_name || "team"} · {row.created_at}
-              </span>
-              <span>
-                Communication #{row.id}
-                {" · "}
-                <Link href={`/communications?communication=${row.id}`} className="underline">
-                  permalink
-                </Link>
-              </span>
-            </div>
+      {/* Timestamps & Message details */}
+      <div className="grid gap-3 sm:grid-cols-2 bg-slate-50/70 p-3 rounded-xl border border-slate-100 text-xs">
+        <div>
+          <span className="text-slate-400 font-medium">Client Message:</span>{" "}
+          <span className="font-semibold text-slate-800">
+            {row.client_message_at || "Not recorded"}
+          </span>
+        </div>
+        <div>
+          <span className="text-slate-400 font-medium">Team Response:</span>{" "}
+          <span className="font-semibold text-slate-800">
+            {row.response_at || "Pending response"}
+          </span>
+        </div>
+      </div>
 
-            <form action={updateCommunicationAction} className="mt-2 grid gap-2 md:grid-cols-6">
-              <input type="hidden" name="id" value={row.id} />
-              <label className="text-xs font-medium text-zinc-600 md:col-span-6">
-                Communication note
-                <textarea
-                  name="notes"
-                  rows={2}
-                  defaultValue={row.notes || ""}
-                  placeholder="No note yet — add what was said in the conversation"
-                  className="mt-1 w-full rounded border bg-white px-2 py-1 text-sm"
-                />
-              </label>
-              <label className="text-xs">
-                Channel
-                <select
-                  name="channel"
-                  defaultValue={row.channel || "whatsapp"}
-                  className="mt-1 w-full rounded border bg-white px-2 py-1"
-                >
-                  {COMMUNICATION_CHANNELS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs">
-                Status
-                <select
-                  name="status"
-                  defaultValue={row.status}
-                  className="mt-1 w-full rounded border bg-white px-2 py-1"
-                >
-                  {["responded", "pending", "missed", "delayed"].map((status) => (
-                    <option key={status}>{status}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs">
-                Response at
-                <input
-                  name="response_at"
-                  type="datetime-local"
-                  defaultValue={row.response_at || ""}
-                  className="mt-1 w-full rounded border bg-white px-2 py-1"
-                />
-              </label>
-              <div className="flex items-end md:col-span-3">
-                <button className="rounded border bg-white px-3 py-1">Save communication</button>
-              </div>
-            </form>
+      {row.notes && (
+        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-white rounded-xl p-3 border border-slate-200/80">
+          {row.notes}
+        </p>
+      )}
 
-            <div className="mt-3 border-t pt-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-medium">
-                  Feedback from this communication{" "}
-                  <span className="text-xs font-normal text-zinc-500">
-                    {feedback.length ? `(${feedback.length})` : "(none)"}
-                  </span>
+      {/* Linked task if present */}
+      {row.linked_task_id && (
+        <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[#12143d]">Linked Owner Task:</span>
+            <Link
+              href={`/tasks?task=${row.linked_task_id}`}
+              className="font-medium text-[#ed8527] hover:underline"
+            >
+              #{row.linked_task_id} {row.linked_task_title}
+            </Link>
+          </div>
+          <span className="text-slate-500">
+            {row.linked_task_assignee} · {row.linked_task_status}
+          </span>
+        </div>
+      )}
+
+      {/* Feedback items attached */}
+      {feedback.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-3.5 space-y-2">
+          <div className="text-xs font-bold uppercase tracking-wider text-amber-900">
+            Attached Feedback Items ({feedback.length})
+          </div>
+          <div className="space-y-2">
+            {feedback.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white p-3 text-xs shadow-2xs"
+              >
+                <div>
+                  <Link
+                    href={`/feedback?feedback=${item.id}`}
+                    className="font-bold text-[#12143d] hover:text-[#ed8527]"
+                  >
+                    #{item.id} {item.title || item.content?.slice(0, 60)}
+                  </Link>
+                  <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
+                      {feedbackStatusLabel(item.status)}
+                    </span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
+                      {feedbackCategoryLabel(item.category)}
+                    </span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
+                      {feedbackSentimentLabel(item.sentiment)}
+                    </span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
+                      {feedbackPriorityLabel(item.priority)} priority
+                    </span>
+                  </div>
                 </div>
-                {feedback.length === 0 && (
-                  <span className="text-xs text-zinc-500">
-                    {row.communication_type === "feedback"
-                      ? "Classified as feedback — add the item below."
-                      : "General communication: no feedback record."}
-                  </span>
+
+                {canManageFeedback(item, row, viewer) && (
+                  <form action={updateFeedbackAction} className="flex items-center gap-1 shrink-0">
+                    <input type="hidden" name="id" value={item.id} />
+                    <select
+                      name="status"
+                      defaultValue={item.status}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800"
+                    >
+                      {FEEDBACK_STATUSES.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-[#12143d] px-2.5 py-1 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer"
+                    >
+                      Update
+                    </button>
+                  </form>
                 )}
               </div>
-
-              {feedback.length > 0 && (
-                <ul className="mt-2 space-y-2">
-                  {feedback.map((item) => (
-                    <li key={item.id} className="rounded border bg-white p-2 text-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <Link
-                            href={`/feedback?feedback=${item.id}`}
-                            className="font-medium underline"
-                          >
-                            {item.title || item.content?.slice(0, 60)}
-                          </Link>
-                          <div className="mt-1 flex flex-wrap gap-1 text-xs">
-                            <span className="rounded bg-zinc-100 px-2 py-0.5">
-                              {feedbackStatusLabel(item.status)}
-                            </span>
-                            <span className="rounded bg-zinc-100 px-2 py-0.5">
-                              {feedbackCategoryLabel(item.category)}
-                            </span>
-                            <span className="rounded bg-zinc-100 px-2 py-0.5">
-                              {feedbackSentimentLabel(item.sentiment)}
-                            </span>
-                            <span className="rounded bg-zinc-100 px-2 py-0.5">
-                              {feedbackPriorityLabel(item.priority)} priority
-                            </span>
-                            <span className="rounded bg-zinc-100 px-2 py-0.5">
-                              {item.action_required ? "Action required" : "No action required"}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-600">
-                            {item.assignee_name || "Unassigned"}
-                            {item.due_date ? ` · due ${item.due_date}` : ""}
-                            {item.task_count ? ` · ${item.task_count} task${item.task_count === 1 ? "" : "s"}` : " · no task"}
-                          </div>
-                        </div>
-                        {canManageFeedback(item, row, viewer) && (
-                          <form action={updateFeedbackAction} className="flex flex-wrap items-end gap-1">
-                            <input type="hidden" name="id" value={item.id} />
-                            <select
-                              name="status"
-                              defaultValue={item.status}
-                              className="rounded border px-2 py-1 text-xs"
-                            >
-                              {FEEDBACK_STATUSES.map((status) => (
-                                <option key={status.value} value={status.value}>
-                                  {status.label}
-                                </option>
-                              ))}
-                            </select>
-                            <button className="rounded border px-2 py-1 text-xs">Update</button>
-                          </form>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs underline">
-                  Add another feedback item to this communication
-                </summary>
-                <form action={addFeedbackAction} className="mt-2 grid gap-2 rounded border bg-white p-2 md:grid-cols-4">
-                  <input type="hidden" name="communication_id" value={row.id} />
-                  <input
-                    name="title"
-                    required
-                    placeholder="Feedback subject *"
-                    className="rounded border px-2 py-1 md:col-span-2"
-                  />
-                  <select name="category" defaultValue="other" className="rounded border px-2 py-1">
-                    {FEEDBACK_CATEGORIES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select name="sentiment" defaultValue="neutral" className="rounded border px-2 py-1">
-                    {FEEDBACK_SENTIMENTS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <textarea
-                    name="description"
-                    required
-                    rows={2}
-                    placeholder="What the client said *"
-                    className="rounded border px-2 py-1 md:col-span-4"
-                  />
-                  <select name="priority" defaultValue="medium" className="rounded border px-2 py-1">
-                    {FEEDBACK_PRIORITIES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label} priority
-                      </option>
-                    ))}
-                  </select>
-                  <select name="assigned_to" defaultValue={viewer.id} className="rounded border px-2 py-1">
-                    <option value="">Assign if action needed</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="text-xs">
-                    Expected resolution
-                    <input name="due_date" type="date" className="mt-1 w-full rounded border px-2 py-1" />
-                  </label>
-                  <div className="space-y-1 text-xs">
-                    <label className="flex items-center gap-1">
-                      <input type="checkbox" name="action_required" defaultChecked /> Action required
-                    </label>
-                    <label className="flex items-center gap-1">
-                      <input type="checkbox" name="create_task" defaultChecked /> Create task
-                    </label>
-                  </div>
-                  <div className="md:col-span-4">
-                    <button className="rounded border px-3 py-1 text-sm">Add feedback</button>
-                  </div>
-                </form>
-              </details>
-
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs underline">
-                  Change communication classification
-                </summary>
-                <form action={reclassifyCommunicationAction} className="mt-2 flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="id" value={row.id} />
-                  <select
-                    name="communication_type"
-                    defaultValue={row.communication_type}
-                    className="rounded border px-2 py-1 text-sm"
-                  >
-                    {COMMUNICATION_TYPES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="rounded border px-3 py-1 text-sm">Save classification</button>
-                </form>
-                <p className="mt-1 text-xs text-zinc-500">
-                  A communication with feedback cannot be changed to General until its feedback is closed
-                  or removed.
-                </p>
-              </details>
-            </div>
+            ))}
           </div>
-        </td>
-      </tr>
-    </>
+        </div>
+      )}
+
+      {/* Accordion tools for updating communication details */}
+      <div className="border-t border-slate-100 pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <details className="text-xs">
+          <summary className="cursor-pointer font-medium text-slate-600 hover:text-[#12143d]">
+            ⚙️ Edit Communication &amp; Response SLA
+          </summary>
+          <form
+            action={updateCommunicationAction}
+            className="mt-2 grid gap-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-3"
+          >
+            <input type="hidden" name="id" value={row.id} />
+            <div className="sm:col-span-3">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Communication Notes
+              </label>
+              <textarea
+                name="notes"
+                rows={2}
+                defaultValue={row.notes || ""}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Channel
+              </label>
+              <select
+                name="channel"
+                defaultValue={row.channel || "whatsapp"}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+              >
+                {COMMUNICATION_CHANNELS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                SLA Status
+              </label>
+              <select
+                name="status"
+                defaultValue={row.status}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+              >
+                {["responded", "pending", "missed", "delayed"].map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Response Timestamp
+              </label>
+              <input
+                name="response_at"
+                type="datetime-local"
+                defaultValue={row.response_at || ""}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+              />
+            </div>
+            <div className="sm:col-span-3 flex justify-end">
+              <button
+                type="submit"
+                className="rounded-lg bg-[#12143d] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer"
+              >
+                Save Communication
+              </button>
+            </div>
+          </form>
+        </details>
+
+        <details className="text-xs">
+          <summary className="cursor-pointer font-semibold text-[#ed8527] hover:underline">
+            + Extract Another Feedback Item
+          </summary>
+          <form
+            action={addFeedbackAction}
+            className="mt-2 grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-3"
+          >
+            <input type="hidden" name="communication_id" value={row.id} />
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Subject *
+              </label>
+              <input
+                name="title"
+                required
+                placeholder="Feedback subject..."
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Category
+              </label>
+              <select
+                name="category"
+                defaultValue="other"
+                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800"
+              >
+                {FEEDBACK_CATEGORIES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-3">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                What did the client say? *
+              </label>
+              <textarea
+                name="description"
+                required
+                rows={2}
+                placeholder="Revision notes..."
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Priority
+              </label>
+              <select
+                name="priority"
+                defaultValue="medium"
+                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800"
+              >
+                {FEEDBACK_PRIORITIES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Assignee
+              </label>
+              <select
+                name="assigned_to"
+                defaultValue={viewer.id}
+                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800"
+              >
+                <option value="">Unassigned</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                Resolution Date
+              </label>
+              <input
+                name="due_date"
+                type="date"
+                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800"
+              />
+            </div>
+            <div className="sm:col-span-3 flex items-center justify-between pt-1">
+              <label className="flex items-center gap-1.5 cursor-pointer text-slate-700">
+                <input type="checkbox" name="create_task" defaultChecked className="rounded text-[#ed8527]" />
+                Auto-create execution task
+              </label>
+              <button
+                type="submit"
+                className="rounded-lg bg-[#ed8527] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#d97116] transition-colors cursor-pointer"
+              >
+                + Add Feedback
+              </button>
+            </div>
+          </form>
+        </details>
+      </div>
+    </article>
   );
 }
 

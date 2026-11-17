@@ -1,35 +1,82 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #000000;
+  --brand-navy: #12143d;
+  --brand-navy-dark: #0a0b22;
+  --brand-navy-light: #20245e;
+  --brand-navy-surface: #f4f5fc;
+  
+  --brand-orange: #ed8527;
+  --brand-orange-hover: #d97116;
+  --brand-orange-light: #fff7ed;
+  --brand-orange-surface: #ffedd5;
+  
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
 @theme inline {
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-dark: var(--brand-navy-dark);
+  --color-brand-navy-light: var(--brand-navy-light);
+  --color-brand-navy-surface: var(--brand-navy-surface);
+
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-hover: var(--brand-orange-hover);
+  --color-brand-orange-light: var(--brand-orange-light);
+  --color-brand-orange-surface: var(--brand-orange-surface);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
 body {
-  background: var(--background);
-  color: #000000;
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-@layer base {
-  *,
-  ::before,
-  ::after {
-    color: #000000 !important;
-  }
-  button,
-  input[type="button"],
-  input[type="submit"],
-  input[type="reset"] {
-    /* color: #ffffff !important;
-    background-color: #000000 !important;
-    border-color: #000000 !important; */
-  }
+/* Ensure all text-white elements and dark buttons always display crisp white text */
+.text-white,
+[class*="text-white"],
+button.text-white,
+a.text-white,
+span.text-white {
+  color: #ffffff !important;
+}
+
+/* Specific background color rules for brand navy and orange buttons/elements */
+.bg-\[\#12143d\],
+.bg-\[\#0a0b22\],
+.bg-\[\#20245e\],
+.bg-\[\#ed8527\],
+.bg-\[\#d97116\] {
+  color: #ffffff !important;
+}
+
+.bg-\[\#12143d\] *,
+.bg-\[\#0a0b22\] *,
+.bg-\[\#20245e\] *,
+.bg-\[\#ed8527\] *,
+.bg-\[\#d97116\] * {
+  color: inherit;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

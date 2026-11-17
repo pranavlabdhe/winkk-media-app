@@ -33,12 +33,17 @@ export function CommunicationForm({
   currentUserId: number;
 }) {
   const [type, setType] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState<number | undefined>(defaultClientId);
   const [items, setItems] = useState<FeedbackItem[]>([
     { key: 1, actionRequired: true, createTask: true },
   ]);
 
+  const selectedClient = clients.find((c) => c.id === selectedClientId);
+
   function updateItem(key: number, patch: Partial<FeedbackItem>) {
-    setItems((current) => current.map((item) => (item.key === key ? { ...item, ...patch } : item)));
+    setItems((current) =>
+      current.map((item) => (item.key === key ? { ...item, ...patch } : item))
+    );
   }
 
   function addItem() {
@@ -49,219 +54,364 @@ export function CommunicationForm({
   }
 
   function removeItem(key: number) {
-    setItems((current) => (current.length > 1 ? current.filter((item) => item.key !== key) : current));
+    setItems((current) =>
+      current.length > 1 ? current.filter((item) => item.key !== key) : current
+    );
   }
 
+  const isFeedbackType = type === "feedback";
+
   return (
-    <form action={logCommunicationAction} className="space-y-3 rounded-lg border bg-white p-4">
-      <div className="grid gap-2 md:grid-cols-4">
-        <select
-          name="communication_type"
-          required
-          value={type}
-          onChange={(event) => setType(event.target.value)}
-          className="rounded border px-3 py-2 md:col-span-2"
-        >
-          <option value="">Communication type *</option>
-          {COMMUNICATION_TYPES.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <select
-          name="channel"
-          defaultValue={defaultChannel}
-          className="rounded border px-3 py-2"
-        >
-          {COMMUNICATION_CHANNELS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <select name="status" className="rounded border px-3 py-2" defaultValue="responded">
-          {["responded", "pending", "missed", "delayed"].map((status) => (
-            <option key={status}>{status}</option>
-          ))}
-        </select>
-
-        <select
-          name="client_id"
-          required
-          defaultValue={defaultClientId || ""}
-          className="rounded border px-3 py-2"
-        >
-          <option value="">Client *</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </select>
-        <input
-          name="executive_name"
-          required
-          defaultValue={defaultExecutive}
-          placeholder="Handled by *"
-          className="rounded border px-3 py-2"
-        />
-        <input name="whatsapp_group" placeholder="Group / participants" className="rounded border px-3 py-2 md:col-span-2" />
-
-        <label className="text-xs">
-          Client message at
-          <input
-            name="client_message_at"
-            type="datetime-local"
-            className="mt-1 w-full rounded border px-3 py-2"
-          />
-        </label>
-        <label className="text-xs">
-          Response at
-          <input
-            name="response_at"
-            type="datetime-local"
-            className="mt-1 w-full rounded border px-3 py-2"
-          />
-        </label>
-        <div className="text-xs text-zinc-600 md:col-span-2 md:self-end">
-          {type === "feedback"
-            ? "The communication and every feedback item are saved together."
-            : "General communication keeps the conversation history without creating feedback."}
+    <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+      <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#ed8527]/10 text-[#ed8527]">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+          </span>
+          <h2 className="text-sm font-bold text-[#12143d]">
+            Log Client Interaction / Communication
+          </h2>
         </div>
-
-        <textarea
-          name="notes"
-          rows={2}
-          placeholder="What was discussed — the full note stays visible on the communication record"
-          className="rounded border px-3 py-2 md:col-span-4"
-        />
+        <span className="text-[11px] font-medium text-slate-400">
+          Tracks response SLAs & extracts feedback items
+        </span>
       </div>
 
-      {type === "feedback" && (
-        <div className="space-y-3 rounded-lg border border-dashed p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-medium">Feedback received in this communication</div>
-              <p className="text-xs text-zinc-600">
-                One client call can contain several feedback items. Each one becomes its own record.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={addItem}
-              className="rounded border px-2 py-1 text-xs"
+      <form action={logCommunicationAction} className="space-y-4">
+        {/* Step 1: Communication Classification */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Communication Type <span className="text-rose-500">*</span>
+            </label>
+            <select
+              name="communication_type"
+              required
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
             >
-              + Add another feedback item
-            </button>
+              <option value="">Select type *</option>
+              {COMMUNICATION_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {items.map((item, index) => (
-            <div key={item.key} className="rounded border bg-zinc-50 p-3">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Feedback {index + 1}
-                </div>
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.key)}
-                    className="rounded border px-2 py-0.5 text-xs"
-                  >
-                    Remove
-                  </button>
-                )}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Channel
+            </label>
+            <select
+              name="channel"
+              defaultValue={defaultChannel}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              {COMMUNICATION_CHANNELS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              SLA / Response Status
+            </label>
+            <select
+              name="status"
+              defaultValue="responded"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              <option value="responded">Responded in Time</option>
+              <option value="pending">Pending Response</option>
+              <option value="delayed">Delayed Response</option>
+              <option value="missed">Missed Communication</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Step 2: Client & Team Context */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Client Account <span className="text-rose-500">*</span>
+            </label>
+            <select
+              name="client_id"
+              required
+              defaultValue={defaultClientId || ""}
+              onChange={(e) => setSelectedClientId(Number(e.target.value) || undefined)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              <option value="">Select client *</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Handled by Executive <span className="text-rose-500">*</span>
+            </label>
+            <input
+              name="executive_name"
+              defaultValue={defaultExecutive}
+              required
+              placeholder="Your name / executive"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              WhatsApp Group / Phone / Contact
+            </label>
+            <input
+              name="whatsapp_group"
+              defaultValue={selectedClient?.whatsapp_group || ""}
+              placeholder="e.g. Solhaus Marketing"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            />
+          </div>
+        </div>
+
+        {/* Timestamps */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Client Message Received Timestamp
+            </label>
+            <input
+              name="client_message_at"
+              type="datetime-local"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Our Response Timestamp
+            </label>
+            <input
+              name="response_at"
+              type="datetime-local"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">
+            Conversation Notes / Summary
+          </label>
+          <textarea
+            name="notes"
+            rows={2}
+            placeholder="Summarize the client discussion, questions, or context..."
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+          />
+        </div>
+
+        {/* Step 3: Extracted Feedback Items (When feedback type is chosen) */}
+        {isFeedbackType && (
+          <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+            <div className="flex items-center justify-between border-b border-amber-200/80 pb-2">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                  Feedback Items in this Conversation
+                </h3>
+                <p className="text-[11px] text-amber-700">
+                  Each item will create a distinct tracked record on the feedback board.
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={addItem}
+                className="rounded-lg bg-white border border-amber-300 px-3 py-1 text-xs font-bold text-amber-800 hover:bg-amber-100 transition-colors cursor-pointer shadow-2xs"
+              >
+                + Add Another Feedback
+              </button>
+            </div>
 
-              <div className="mt-2 grid gap-2 md:grid-cols-4">
-                <input
-                  name={`feedback.${index}.title`}
-                  required
-                  placeholder="Feedback subject *"
-                  className="rounded border px-3 py-2 md:col-span-2"
-                />
-                <select name={`feedback.${index}.category`} className="rounded border px-3 py-2" defaultValue="creative">
-                  {FEEDBACK_CATEGORIES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <select name={`feedback.${index}.sentiment`} className="rounded border px-3 py-2" defaultValue="neutral">
-                  {FEEDBACK_SENTIMENTS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+            {items.map((item, index) => (
+              <div
+                key={item.key}
+                className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#12143d]">
+                    Feedback Item #{index + 1}
+                  </span>
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.key)}
+                      className="text-xs text-rose-500 hover:text-rose-700 hover:underline cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
 
-                <textarea
-                  name={`feedback.${index}.description`}
-                  required
-                  rows={2}
-                  placeholder="What exactly did the client say? *"
-                  className="rounded border px-3 py-2 md:col-span-4"
-                />
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="lg:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Subject <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      name={`feedback_${index}_title`}
+                      required
+                      placeholder="e.g. Change reel music to trending audio"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-[#ed8527] focus:outline-none"
+                    />
+                  </div>
 
-                <select name={`feedback.${index}.priority`} className="rounded border px-3 py-2" defaultValue="medium">
-                  {FEEDBACK_PRIORITIES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label} priority
-                    </option>
-                  ))}
-                </select>
-                <select
-                  name={`feedback.${index}.assigned_to`}
-                  className="rounded border px-3 py-2"
-                  defaultValue={currentUserId}
-                >
-                  <option value="">Assign if action needed</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                      {user.job_title ? ` · ${user.job_title}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <label className="text-xs">
-                  Expected resolution
-                  <input
-                    name={`feedback.${index}.due_date`}
-                    type="date"
-                    className="mt-1 w-full rounded border px-3 py-2"
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Category
+                    </label>
+                    <select
+                      name={`feedback_${index}_category`}
+                      defaultValue="creative"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-[#ed8527] focus:outline-none"
+                    >
+                      {FEEDBACK_CATEGORIES.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    What did the client say? <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    name={`feedback_${index}_description`}
+                    required
+                    rows={2}
+                    placeholder="Specific revision instructions..."
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-[#ed8527] focus:outline-none"
                   />
-                </label>
-                <div className="space-y-1 self-center text-xs">
-                  <label className="flex items-center gap-2">
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Sentiment
+                    </label>
+                    <select
+                      name={`feedback_${index}_sentiment`}
+                      defaultValue="neutral"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                    >
+                      {FEEDBACK_SENTIMENTS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Priority
+                    </label>
+                    <select
+                      name={`feedback_${index}_priority`}
+                      defaultValue="medium"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                    >
+                      {FEEDBACK_PRIORITIES.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Assign to
+                    </label>
+                    <select
+                      name={`feedback_${index}_assigned_to`}
+                      defaultValue={currentUserId}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                    >
+                      <option value="">Unassigned</option>
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Expected Date
+                    </label>
+                    <input
+                      name={`feedback_${index}_due_date`}
+                      type="date"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-700 pt-1">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="checkbox"
-                      name={`feedback.${index}.action_required`}
+                      name={`feedback_${index}_action_required`}
                       checked={item.actionRequired}
-                      onChange={(event) =>
-                        updateItem(item.key, { actionRequired: event.target.checked })
-                      }
+                      onChange={(e) => updateItem(item.key, { actionRequired: e.target.checked })}
+                      className="rounded text-[#ed8527]"
                     />
                     Action required
                   </label>
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="checkbox"
-                      name={`feedback.${index}.create_task`}
+                      name={`feedback_${index}_create_task`}
                       checked={item.createTask}
-                      onChange={(event) => updateItem(item.key, { createTask: event.target.checked })}
+                      onChange={(e) => updateItem(item.key, { createTask: e.target.checked })}
+                      className="rounded text-[#ed8527]"
                     />
-                    Create a follow-up task
+                    Create linked task
                   </label>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      <button className="w-full rounded bg-zinc-900 px-3 py-2 font-medium text-white md:w-auto">
-        Log communication
-      </button>
-    </form>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-slate-500">
+            {isFeedbackType
+              ? "⚡ Will log the communication and create all listed feedback items with assigned tasks."
+              : "General client interactions record communication SLA without creating feedback tickets."}
+          </p>
+          <button
+            type="submit"
+            className="w-full sm:w-auto rounded-xl bg-[#ed8527] px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-[#ed8527]/20 transition-all hover:bg-[#d97116] hover:shadow-lg active:scale-[0.99] cursor-pointer"
+          >
+            + Log Communication
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

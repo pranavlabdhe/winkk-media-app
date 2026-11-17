@@ -203,147 +203,384 @@ export default async function MeetingsPage({
   const followUpsByParent: Record<number, any[]> = {};
   for (const task of followUps) (followUpsByParent[task.follow_up_of_task_id] ||= []).push(task);
 
+  const statusBadges: Record<string, { label: string; badge: string }> = {
+    upcoming: { label: "Upcoming", badge: "bg-blue-50 text-blue-800 border-blue-200 font-semibold" },
+    completed: { label: "Completed", badge: "bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold" },
+    cancelled: { label: "Cancelled", badge: "bg-slate-100 text-slate-500 border-slate-200" },
+  };
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Owner&apos;s Client Meeting Scheduler</h1>
-        <p className="text-sm">
-          Meetings are connected to a task, owner, status, and activity timeline. Outcomes can create
-          follow-up tasks without leaving this page.
-        </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#12143d] text-white">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-[#12143d]">
+              Client Meetings &amp; Strategy Reviews
+            </h1>
+          </div>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            Schedule reviews, record agenda notes, and provision follow-up execution tasks directly from meetings.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-slate-700 shadow-2xs">
+            Total Meetings: <b className="text-[#12143d]">{rows.length}</b>
+          </div>
+        </div>
       </div>
 
       {taskFilter && (
-        <div className="rounded border bg-white p-2 text-sm">
-          Showing meeting linked to task #{taskFilter}.{" "}
-          <Link href="/meetings" className="underline">
-            Show all meetings
+        <div className="flex items-center justify-between rounded-xl border border-[#ed8527]/30 bg-orange-50/60 px-4 py-3 text-xs sm:text-sm text-slate-800">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ed8527] text-white text-[10px] font-bold">
+              i
+            </span>
+            Filtering meeting linked to Task <span className="font-bold text-[#12143d]">#{taskFilter}</span>.
+          </div>
+          <Link
+            href="/meetings"
+            className="rounded-lg bg-white border border-slate-200 px-3 py-1 text-xs font-semibold text-[#12143d] hover:bg-slate-50 shadow-2xs"
+          >
+            Show All Meetings
           </Link>
         </div>
       )}
 
-      <form action={createMeeting} className="grid gap-2 rounded-lg border bg-white p-4 md:grid-cols-4">
-        <select name="client_id" required className="rounded border px-3 py-2" defaultValue={clientFilter || ""}>
-          <option value="">Client *</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <input name="title" required placeholder="Meeting title *" className="rounded border px-3 py-2" />
-        <input name="meeting_at" type="datetime-local" required className="rounded border px-3 py-2" />
-        <select name="status" className="rounded border px-3 py-2">
-          {["upcoming", "completed", "cancelled"].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <select name="owner_id" className="rounded border px-3 py-2">
-          <option value="">Task owner: automatic</option>
-          {users.map((user) => (
-            <option key={user.id} value={user.id}>
-              {user.name}
-              {user.job_title ? ` · ${user.job_title}` : ""}
-            </option>
-          ))}
-        </select>
-        <select name="task_id" className="rounded border px-3 py-2 md:col-span-3">
-          <option value="">Create/link task automatically</option>
-          {linkableTasks.map((task) => (
-            <option key={task.id} value={task.id}>
-              Link to task: {task.title} · {task.client_name || "Internal"} · {taskCategoryLabel(task.category)}
-            </option>
-          ))}
-        </select>
-        <textarea
-          name="discussion_notes"
-          placeholder="Agenda / discussion notes"
-          className="rounded border px-3 py-2 md:col-span-4"
-        />
-        <button className="rounded px-3 py-2 md:col-span-4">Schedule meeting</button>
-      </form>
+      {/* Schedule Meeting Form Card */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+        <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#ed8527]/10 text-[#ed8527]">
+              +
+            </span>
+            <h2 className="text-sm font-bold text-[#12143d]">
+              Schedule a Client Meeting
+            </h2>
+          </div>
+          <span className="text-[11px] font-medium text-slate-400">
+            Automatically connects to task board &amp; activity timeline
+          </span>
+        </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {rows.map((m) => (
-          <div key={m.id} className="rounded-lg border bg-white p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-semibold">{m.title}</div>
-                <div className="text-sm">
-                  {m.client_name} · {m.meeting_at}
-                </div>
-                <div className="mt-1 text-xs">
-                  {m.linked_task_id ? (
-                    <Link href={`/tasks?task=${m.linked_task_id}`} className="underline">
-                      Linked task: {m.linked_task_title} · {m.linked_task_status} · Due{" "}
-                      {m.linked_task_due || "-"} · {m.linked_task_assignee || "Unassigned"}
-                    </Link>
-                  ) : (
-                    "No linked task"
-                  )}
-                </div>
-              </div>
-              <span className="rounded bg-zinc-100 px-2 py-1 text-xs font-medium">{m.status}</span>
-            </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm">{m.discussion_notes || "No notes yet."}</p>
-
-            <form action={updateMeeting} className="mt-3 space-y-2">
-              <input type="hidden" name="id" value={m.id} />
-              <select name="status" defaultValue={m.status} className="rounded border px-2 py-1 text-sm">
-                {["upcoming", "completed", "cancelled"].map((s) => (
-                  <option key={s}>{s}</option>
+        <form action={createMeeting} className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Client Account <span className="text-rose-500">*</span>
+              </label>
+              <select
+                name="client_id"
+                required
+                defaultValue={clientFilter || ""}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              >
+                <option value="">Select client *</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
-              <textarea
-                name="discussion_notes"
-                defaultValue={m.discussion_notes || ""}
-                className="w-full rounded border px-2 py-1 text-sm"
-                placeholder="Discussion notes / decisions"
-              />
-              <button className="rounded border px-2 py-1 text-sm">Update meeting</button>
-            </form>
+            </div>
 
-            <div className="mt-3 border-t pt-2">
-              <div className="text-sm font-medium">Follow-up tasks</div>
-              <ul className="mt-1 space-y-1 text-sm">
-                {(followUpsByParent[m.linked_task_id] || []).map((task) => (
-                  <li key={task.id}>
-                    •{" "}
-                    <Link href={`/tasks?task=${task.id}`} className="underline">
-                      {task.title}
-                    </Link>{" "}
-                    — {task.assignee_name} · {task.status.replace("_", " ")}
-                    {task.due_date ? ` · due ${task.due_date}` : ""}
-                  </li>
-                ))}
-                {!(followUpsByParent[m.linked_task_id] || []).length && (
-                  <li className="text-zinc-500">No follow-up tasks yet.</li>
-                )}
-              </ul>
-              <form action={createFollowUpTask} className="mt-2 grid gap-1 md:grid-cols-2">
-                <input type="hidden" name="meeting_id" value={m.id} />
-                <input
-                  name="title"
-                  required
-                  placeholder="Follow-up task title"
-                  className="rounded border px-2 py-1 text-sm md:col-span-2"
-                />
-                <select name="assigned_to" defaultValue={session?.id || ""} className="rounded border px-2 py-1 text-sm">
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </select>
-                <input name="due_date" type="date" className="rounded border px-2 py-1 text-sm" />
-                <button className="rounded px-2 py-1 text-sm md:col-span-2">Create follow-up task</button>
-              </form>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Meeting Title / Subject <span className="text-rose-500">*</span>
+              </label>
+              <input
+                name="title"
+                required
+                placeholder="e.g. Monthly Performance & Diwali Campaign Review"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Meeting Date &amp; Time <span className="text-rose-500">*</span>
+              </label>
+              <input
+                name="meeting_at"
+                type="datetime-local"
+                required
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              />
             </div>
           </div>
-        ))}
-        {!rows.length && (
-          <div className="rounded-lg border bg-white p-4 text-zinc-500">No meetings yet.</div>
-        )}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Status
+              </label>
+              <select
+                name="status"
+                defaultValue="upcoming"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              >
+                {["upcoming", "completed", "cancelled"].map((s) => (
+                  <option key={s} value={s}>
+                    {statusBadges[s]?.label || s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Meeting Task Owner
+              </label>
+              <select
+                name="owner_id"
+                defaultValue={session?.id || ""}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              >
+                <option value="">Auto-assign to session user</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                    {user.job_title ? ` · ${user.job_title}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Link to Existing Task (Optional)
+              </label>
+              <select
+                name="task_id"
+                defaultValue=""
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+              >
+                <option value="">Auto-provision meeting task</option>
+                {linkableTasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    #{task.id}: {task.title} · {task.client_name || "Internal"}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Agenda &amp; Discussion Points
+            </label>
+            <textarea
+              name="discussion_notes"
+              rows={2}
+              placeholder="Key discussion topics, review slides, decisions..."
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 shadow-2xs focus:border-[#ed8527] focus:outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              className="w-full sm:w-auto rounded-xl bg-[#ed8527] px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-[#ed8527]/20 hover:bg-[#d97116] transition-all cursor-pointer"
+            >
+              + Schedule Meeting
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Meetings List */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 px-1">
+          Meetings Schedule ({rows.length})
+        </h3>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {rows.map((m) => {
+            const st = statusBadges[m.status] || {
+              label: m.status,
+              badge: "bg-slate-100 text-slate-700 border-slate-200",
+            };
+
+            return (
+              <div
+                key={m.id}
+                className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition-all hover:border-slate-300 space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900">{m.title}</h4>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Client: <b className="text-[#12143d]">{m.client_name}</b> ·{" "}
+                      <span className="font-medium text-slate-700">{m.meeting_at}</span>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-xs ${st.badge}`}
+                  >
+                    {st.label}
+                  </span>
+                </div>
+
+                {m.discussion_notes && (
+                  <p className="text-xs sm:text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap">
+                    {m.discussion_notes}
+                  </p>
+                )}
+
+                {/* Linked Meeting Task */}
+                {m.linked_task_id && (
+                  <div className="text-xs rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-slate-600">Meeting Task:</span>{" "}
+                      <Link
+                        href={`/tasks?task=${m.linked_task_id}`}
+                        className="font-bold text-[#12143d] hover:text-[#ed8527]"
+                      >
+                        #{m.linked_task_id} {m.linked_task_title}
+                      </Link>
+                    </div>
+                    <span className="text-[11px] text-slate-500">
+                      {m.linked_task_assignee} · {m.linked_task_status}
+                    </span>
+                  </div>
+                )}
+
+                {/* Follow-up Tasks */}
+                <div className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Follow-up Action Items ({(followUpsByParent[m.linked_task_id] || []).length})
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    {(followUpsByParent[m.linked_task_id] || []).map((task) => (
+                      <div
+                        key={task.id}
+                        className="flex items-center justify-between rounded-lg bg-slate-50 p-2 text-slate-700"
+                      >
+                        <Link
+                          href={`/tasks?task=${task.id}`}
+                          className="font-semibold text-[#12143d] hover:text-[#ed8527]"
+                        >
+                          #{task.id} {task.title}
+                        </Link>
+                        <span className="text-[11px] text-slate-500">
+                          {task.assignee_name} · {task.status.replace("_", " ")}
+                        </span>
+                      </div>
+                    ))}
+                    {!(followUpsByParent[m.linked_task_id] || []).length && (
+                      <p className="text-xs text-slate-400 italic">
+                        No follow-up action tasks created yet.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Create follow-up action form */}
+                  <details className="mt-2 text-xs">
+                    <summary className="cursor-pointer font-semibold text-[#ed8527] hover:underline">
+                      + Add Follow-up Action Item
+                    </summary>
+                    <form
+                      action={createFollowUpTask}
+                      className="mt-2 grid gap-2 rounded-xl bg-slate-50 p-3 border border-slate-200/80 sm:grid-cols-3"
+                    >
+                      <input type="hidden" name="meeting_id" value={m.id} />
+                      <div className="sm:col-span-3">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                          Follow-up Task Title *
+                        </label>
+                        <input
+                          name="title"
+                          required
+                          placeholder="e.g. Revise menu pricing deck based on discussion"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                          Assignee
+                        </label>
+                        <select
+                          name="assigned_to"
+                          defaultValue={session?.id || ""}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                        >
+                          {users.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                          Due Date
+                        </label>
+                        <input
+                          name="due_date"
+                          type="date"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          type="submit"
+                          className="w-full rounded-lg bg-[#12143d] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer"
+                        >
+                          Create Follow-up
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+                </div>
+
+                {/* Inline Meeting Update Form */}
+                <form
+                  action={updateMeeting}
+                  className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs"
+                >
+                  <input type="hidden" name="id" value={m.id} />
+                  <select
+                    name="status"
+                    defaultValue={m.status}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium"
+                  >
+                    {["upcoming", "completed", "cancelled"].map((s) => (
+                      <option key={s} value={s}>
+                        {statusBadges[s]?.label || s}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    name="discussion_notes"
+                    defaultValue={m.discussion_notes || ""}
+                    placeholder="Update discussion minutes..."
+                    className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-[#12143d] px-3 py-1 text-xs font-bold text-white hover:bg-[#20245e] transition-colors cursor-pointer"
+                  >
+                    Save
+                  </button>
+                </form>
+              </div>
+            );
+          })}
+
+          {!rows.length && (
+            <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-xs text-slate-500">
+              No meetings scheduled yet.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

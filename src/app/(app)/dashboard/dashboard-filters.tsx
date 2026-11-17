@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
-import { taskCategoryLabel } from "@/lib/constants";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { TASK_CATEGORIES, taskCategoryLabel } from "@/lib/constants";
 import {
   isTaskOverdue,
   taskPriority,
@@ -44,6 +44,22 @@ export type PostStatusCounts = {
 
 type StatusFilter = "open" | "overdue" | "completed" | "due_today";
 
+type DeadlineFilter = "overdue" | "today" | "next7" | "none";
+
+const DEADLINE_LABELS: Record<DeadlineFilter, string> = {
+  overdue: "Overdue",
+  today: "Due today",
+  next7: "Next 7 days",
+  none: "No deadline",
+};
+
+const PRIORITY_LABELS: Record<TaskPriorityValue, string> = {
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+  none: "No priority",
+};
+
 type Props = {
   tasks: DashboardTask[];
   members: DashboardMember[];
@@ -56,36 +72,38 @@ type Props = {
 const POST_STATUS_CARDS: Array<{
   key: keyof Omit<PostStatusCounts, "total">;
   label: string;
+  badge: string;
+  dot: string;
 }> = [
-  { key: "scheduled", label: "Scheduled" },
-  { key: "published", label: "Published" },
-  { key: "pending", label: "Pending" },
-  { key: "missed", label: "Missed" },
+  { key: "scheduled", label: "Scheduled", badge: "border-blue-200 bg-blue-50/60 text-blue-800", dot: "bg-blue-500" },
+  { key: "published", label: "Published", badge: "border-emerald-200 bg-emerald-50/60 text-emerald-800", dot: "bg-emerald-500" },
+  { key: "pending", label: "Pending Review", badge: "border-amber-200 bg-amber-50/60 text-amber-800", dot: "bg-amber-500" },
+  { key: "missed", label: "Missed", badge: "border-rose-200 bg-rose-50/60 text-rose-800", dot: "bg-rose-500" },
 ];
 
 const STATUS_LABELS: Record<StatusFilter, string> = {
-  open: "Open",
+  open: "Open Tasks",
   overdue: "Overdue",
   completed: "Completed",
-  due_today: "Due today",
+  due_today: "Due Today",
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  todo: "bg-zinc-100 text-zinc-700",
-  in_progress: "bg-blue-50 text-blue-700",
-  done: "bg-emerald-50 text-emerald-700",
+  todo: "bg-slate-100 text-slate-700 border-slate-200",
+  in_progress: "bg-amber-50 text-amber-800 border-amber-200 font-semibold",
+  done: "bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold",
 };
 
 const PRIORITY_BADGE: Record<TaskPriorityValue, string> = {
-  high: "bg-red-50 text-red-700",
-  medium: "bg-amber-50 text-amber-700",
-  low: "bg-zinc-100 text-zinc-600",
-  none: "text-zinc-400",
+  high: "bg-rose-50 text-rose-700 border-rose-200 font-bold",
+  medium: "bg-amber-50 text-amber-800 border-amber-200 font-medium",
+  low: "bg-slate-100 text-slate-600 border-slate-200",
+  none: "text-slate-400 border-transparent",
 };
 
 function statusLabel(status: string) {
-  if (status === "in_progress") return "In progress";
-  if (status === "todo") return "To do";
+  if (status === "in_progress") return "In Progress";
+  if (status === "todo") return "To Do";
   if (status === "done") return "Done";
   return status.replaceAll("_", " ");
 }
@@ -103,6 +121,26 @@ function matchesStatus(task: DashboardTask, filter: StatusFilter, today: string)
   }
 }
 
+function addDays(isoDate: string, days: number) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function matchesDeadline(task: DashboardTask, filter: DeadlineFilter, today: string) {
+  switch (filter) {
+    case "overdue":
+      return !!task.due_date && task.due_date < today;
+    case "today":
+      return task.due_date === today;
+    case "next7":
+      return !!task.due_date && task.due_date > today && task.due_date <= addDays(today, 7);
+    case "none":
+      return !task.due_date;
+  }
+}
+
 export default function DashboardFilters({
   tasks,
   members,
@@ -113,10 +151,40 @@ export default function DashboardFilters({
 }: Props) {
   const [memberId, setMemberId] = useState<number | null>(null);
   const [status, setStatus] = useState<StatusFilter | null>(null);
+  const [taskStatus, setTaskStatus] = useState<string | null>(null);
+  const [priority, setPriority] = useState<TaskPriorityValue | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [client, setClient] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState<DeadlineFilter | null>(null);
   const resultsRef = useRef<HTMLElement>(null);
 
   const selectedMember = members.find((member) => member.id === memberId) || null;
-  const hasFilters = memberId !== null || status !== null;
+  const hasFilters =
+    memberId !== null ||
+    status !== null ||
+    taskStatus !== null ||
+    priority !== null ||
+    category !== null ||
+    client !== null ||
+    deadline !== null;
+
+  const clientOptions = useMemo(() => {
+    const names = new Set<string>();
+    let hasInternal = false;
+    for (const task of tasks) {
+      if (task.client_name) names.add(task.client_name);
+      else hasInternal = true;
+    }
+    return {
+      names: [...names].sort((a, b) => a.localeCompare(b)),
+      hasInternal,
+    };
+  }, [tasks]);
+
+  const categoryOptions = useMemo(() => {
+    const used = new Set(tasks.map((task) => task.category || "other"));
+    return TASK_CATEGORIES.filter((option) => used.has(option.value));
+  }, [tasks]);
 
   const memberRows = useMemo(
     () =>
@@ -141,12 +209,17 @@ export default function DashboardFilters({
 
   const filteredTasks = useMemo(
     () =>
-      tasks.filter(
-        (task) =>
-          (memberId === null || task.assigned_to === memberId) &&
-          (status === null || matchesStatus(task, status, today))
-      ),
-    [tasks, memberId, status, today]
+      tasks.filter((task) => {
+        if (memberId !== null && task.assigned_to !== memberId) return false;
+        if (status !== null && !matchesStatus(task, status, today)) return false;
+        if (taskStatus !== null && task.status !== taskStatus) return false;
+        if (priority !== null && taskPriority(task, today).value !== priority) return false;
+        if (category !== null && (task.category || "other") !== category) return false;
+        if (client !== null && (task.client_name || "__internal") !== client) return false;
+        if (deadline !== null && !matchesDeadline(task, deadline, today)) return false;
+        return true;
+      }),
+    [tasks, memberId, status, taskStatus, priority, category, client, deadline, today]
   );
 
   const statusCounts = useMemo(() => {
@@ -191,31 +264,36 @@ export default function DashboardFilters({
   function resetFilters() {
     setMemberId(null);
     setStatus(null);
+    setTaskStatus(null);
+    setPriority(null);
+    setCategory(null);
+    setClient(null);
+    setDeadline(null);
   }
 
   const interactiveCards: Array<{ filter: StatusFilter; label: string }> = isOwner
     ? [
-        { filter: "open", label: "Open tasks" },
-        { filter: "overdue", label: "Overdue tasks" },
-        { filter: "completed", label: "Completed tasks" },
+        { filter: "open", label: "Open Tasks" },
+        { filter: "overdue", label: "Overdue Deliverables" },
+        { filter: "completed", label: "Completed Tasks" },
       ]
     : [
-        { filter: "open", label: "My open tasks" },
-        { filter: "due_today", label: "Due today" },
+        { filter: "open", label: "My Open Tasks" },
+        { filter: "due_today", label: "Due Today" },
         { filter: "overdue", label: "Overdue" },
         { filter: "completed", label: "Completed" },
       ];
 
   const linkCards = isOwner
     ? [
-        { label: "Clients", value: counts.clients, href: "/clients" },
-        { label: "Feedback needing action", value: counts.feedbackOpen, href: "/feedback" },
-        { label: "Comms needing attention", value: counts.commsAttention, href: "/communications" },
-        { label: "Upcoming meetings", value: counts.meetingsUpcoming, href: "/meetings" },
+        { label: "Active Clients", value: counts.clients, href: "/clients" },
+        { label: "Feedback Needing Action", value: counts.feedbackOpen, href: "/feedback" },
+        { label: "Delayed Comms SLA", value: counts.commsAttention, href: "/communications" },
+        { label: "Upcoming Meetings", value: counts.meetingsUpcoming, href: "/meetings" },
       ]
     : [
-        { label: "Comms needing attention", value: counts.commsAttention, href: "/communications" },
-        { label: "Upcoming meetings", value: counts.meetingsUpcoming, href: "/meetings" },
+        { label: "Delayed Comms SLA", value: counts.commsAttention, href: "/communications" },
+        { label: "Upcoming Meetings", value: counts.meetingsUpcoming, href: "/meetings" },
       ];
 
   const ownerCards = [
@@ -235,135 +313,202 @@ export default function DashboardFilters({
       ];
 
   const resultsTitle = selectedMember
-    ? `${selectedMember.name}'s tasks`
+    ? `${selectedMember.name}'s Tasks`
     : isOwner
-      ? "All tasks"
-      : "My tasks";
+      ? "All Tasks Overview"
+      : "My Tasks";
 
-  const resultSummary = [
-    selectedMember ? selectedMember.name : isOwner ? "Everyone" : "Assigned to me",
-    status ? STATUS_LABELS[status] : "All statuses",
-  ].join(" · ");
+  const resultSummaryParts = [
+    selectedMember ? selectedMember.name : isOwner ? "All Team Members" : "Assigned to Me",
+  ];
+  if (status) resultSummaryParts.push(STATUS_LABELS[status]);
+  if (taskStatus) resultSummaryParts.push(statusLabel(taskStatus));
+  if (priority) resultSummaryParts.push(`${PRIORITY_LABELS[priority]} priority`);
+  if (category) resultSummaryParts.push(taskCategoryLabel(category));
+  if (client) resultSummaryParts.push(client === "__internal" ? "Internal" : client);
+  if (deadline) resultSummaryParts.push(DEADLINE_LABELS[deadline]);
+  if (resultSummaryParts.length === 1) resultSummaryParts.push("All Tasks");
+  const resultSummary = resultSummaryParts.join(" · ");
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* KPI Cards Grid */}
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => {
           if (card.kind === "link") {
             return (
               <Link
                 key={card.label}
                 href={card.href}
-                className="rounded-lg border bg-white p-4 transition hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900"
+                className="group rounded-2xl border border-slate-200/90 bg-white p-4.5 shadow-xs transition-all hover:border-[#ed8527]/50 hover:shadow-sm"
               >
-                <div className="text-sm text-zinc-500">{card.label}</div>
-                <div className="mt-1 text-3xl font-semibold">{card.value}</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {card.label}
+                  </span>
+                  <span className="text-xs font-semibold text-[#ed8527] opacity-0 group-hover:opacity-100 transition-opacity">
+                    View →
+                  </span>
+                </div>
+                <div className="mt-2 text-3xl font-extrabold text-[#12143d]">
+                  {card.value}
+                </div>
               </Link>
             );
           }
 
           const active = status === card.filter;
+          const isOverdueCard = card.filter === "overdue";
+
           return (
             <button
               key={card.filter}
               type="button"
               aria-pressed={active}
               onClick={() => toggleStatus(card.filter)}
-              className={`rounded-lg border bg-white p-4 text-left transition hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${
-                active ? "border-zinc-900 ring-2 ring-zinc-900" : ""
+              className={`rounded-2xl border p-4.5 text-left transition-all shadow-xs cursor-pointer ${
+                active
+                  ? "border-[#12143d] bg-slate-50 ring-2 ring-[#12143d]/20"
+                  : isOverdueCard && statusCounts[card.filter] > 0
+                    ? "border-rose-200 bg-rose-50/30 hover:border-rose-300"
+                    : "border-slate-200/90 bg-white hover:border-slate-300"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-zinc-500">{card.label}</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  {card.label}
+                </span>
                 <span
-                  className={`text-xs ${active ? "font-medium text-zinc-900" : "text-zinc-400"}`}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    active
+                      ? "bg-[#12143d] text-white"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
                 >
-                  {active ? "Filtering" : "Filter"}
+                  {active ? "Filtered" : "Filter"}
                 </span>
               </div>
-              <div className="mt-1 text-3xl font-semibold">{statusCounts[card.filter]}</div>
+              <div
+                className={`mt-2 text-3xl font-extrabold ${
+                  isOverdueCard && statusCounts[card.filter] > 0
+                    ? "text-rose-600"
+                    : "text-[#12143d]"
+                }`}
+              >
+                {statusCounts[card.filter]}
+              </div>
             </button>
           );
         })}
       </div>
 
-      <section className="rounded-lg border bg-white p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      {/* Social Post Content Calendar Cards */}
+      <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="font-semibold">Social post status</h2>
-            <p className="text-xs text-zinc-500">
-              {isOwner ? "Across all clients" : "Posts for your assigned clients"} ·{" "}
-              {postStatuses.total} {postStatuses.total === 1 ? "post" : "posts"} · click a
-              status to open the filtered list
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[#ed8527]" />
+              <h2 className="text-sm font-bold text-[#12143d]">
+                Social Media Publishing Pipeline
+              </h2>
+            </div>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {isOwner ? "Consolidated across all restaurant accounts" : "Posts for assigned accounts"} ·{" "}
+              <b className="text-slate-800">{postStatuses.total}</b> total posts
             </p>
           </div>
-          <Link href="/posts" className="text-sm text-blue-700 hover:underline">
-            View all posts
+          <Link
+            href="/posts"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#12143d] hover:bg-slate-50 shadow-2xs transition-colors"
+          >
+            Manage Social Posts →
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {POST_STATUS_CARDS.map((item) => (
             <Link
               key={item.key}
               href={`/posts?status=${item.key}`}
-              className="rounded-lg border bg-white p-3 transition hover:bg-zinc-50 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900"
+              className={`group rounded-xl border p-3.5 transition-all shadow-2xs hover:shadow-xs ${item.badge}`}
             >
-              <div className="text-sm text-zinc-500">{item.label}</div>
-              <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="text-2xl font-semibold">{postStatuses[item.key]}</span>
-                <span className="text-xs text-zinc-500">View →</span>
+              <div className="flex items-center gap-1.5 text-xs font-semibold">
+                <span className={`h-2 w-2 rounded-full ${item.dot}`} />
+                <span>{item.label}</span>
+              </div>
+              <div className="mt-2 flex items-baseline justify-between gap-2">
+                <span className="text-2xl font-bold">{postStatuses[item.key]}</span>
+                <span className="text-[11px] font-semibold opacity-70 group-hover:opacity-100">
+                  View →
+                </span>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
+      {/* Team Workload Table (Owner view) */}
       {isOwner ? (
-        <section className="rounded-lg border bg-white p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="font-semibold">Team workload</h2>
-              <p className="text-xs text-zinc-500">
-                Click a name, or a count, to filter the task list below.
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[#12143d]" />
+                <h2 className="text-sm font-bold text-[#12143d]">
+                  Team Workload &amp; Accountability
+                </h2>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Click a team member or a status number to filter deliverables below.
               </p>
             </div>
-            <Link href="/tasks" className="text-sm text-blue-700 hover:underline">
-              View all tasks
+            <Link
+              href="/tasks"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#12143d] hover:bg-slate-50 shadow-2xs transition-colors"
+            >
+              Full Task Board →
             </Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-zinc-50 text-left">
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-xs sm:text-sm">
+              <thead className="bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="p-2">Team member</th>
-                  <th className="p-2">Role</th>
-                  <th className="p-2">Open</th>
-                  <th className="p-2">Overdue</th>
-                  <th className="p-2">Completed</th>
+                  <th className="px-4 py-3">Team Member</th>
+                  <th className="px-4 py-3">Role &amp; Department</th>
+                  <th className="px-4 py-3 text-center">Open Tasks</th>
+                  <th className="px-4 py-3 text-center">Overdue</th>
+                  <th className="px-4 py-3 text-center">Completed</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {memberRows.map((member) => {
                   const active = memberId === member.id;
                   return (
                     <tr
                       key={member.id}
-                      className={`border-t transition ${active ? "bg-blue-50" : "hover:bg-zinc-50"}`}
+                      className={`transition-colors ${
+                        active ? "bg-orange-50/50" : "hover:bg-slate-50/60"
+                      }`}
                     >
-                      <td className="p-2">
+                      <td className="px-4 py-3">
                         <button
                           type="button"
                           aria-pressed={active}
                           onClick={() => toggleMember(member.id)}
-                          className={`text-left font-medium hover:text-blue-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${
-                            active ? "text-blue-700 underline" : ""
+                          className={`font-semibold cursor-pointer text-left transition-colors ${
+                            active
+                              ? "text-[#ed8527]"
+                              : "text-[#12143d] hover:text-[#ed8527]"
                           }`}
                         >
-                          {member.name}
+                          {member.name} {active && "✓"}
                         </button>
                       </td>
-                      <td className="p-2">{member.job_title || member.department || "-"}</td>
-                      <td className="p-2">
+                      <td className="px-4 py-3 text-slate-500">
+                        {member.job_title || member.department || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center">
                         <CountButton
                           value={member.open}
                           label={`Open tasks for ${member.name}`}
@@ -371,7 +516,7 @@ export default function DashboardFilters({
                           onClick={() => selectMemberStatus(member.id, "open")}
                         />
                       </td>
-                      <td className="p-2">
+                      <td className="px-4 py-3 text-center">
                         <CountButton
                           value={member.overdue}
                           label={`Overdue tasks for ${member.name}`}
@@ -380,7 +525,7 @@ export default function DashboardFilters({
                           onClick={() => selectMemberStatus(member.id, "overdue")}
                         />
                       </td>
-                      <td className="p-2">
+                      <td className="px-4 py-3 text-center">
                         <CountButton
                           value={member.completed}
                           label={`Completed tasks for ${member.name}`}
@@ -391,179 +536,234 @@ export default function DashboardFilters({
                     </tr>
                   );
                 })}
-                {!memberRows.length && (
-                  <tr>
-                    <td className="p-2 text-zinc-500" colSpan={5}>
-                      No active team members yet.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         </section>
       ) : null}
 
+      {/* Filtered Deliverables Result Section */}
       <section
         ref={resultsRef}
         id="dashboard-tasks"
-        className="scroll-mt-4 rounded-lg border bg-white p-4"
+        className="scroll-mt-6 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
-            <h2 className="font-semibold">{resultsTitle}</h2>
-            <p className="text-sm text-zinc-500">
-              {resultSummary} · {filteredTasks.length}{" "}
-              {filteredTasks.length === 1 ? "task" : "tasks"}
+            <h2 className="text-sm font-bold text-[#12143d]">{resultsTitle}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {resultSummary} · <b className="text-slate-800">{filteredTasks.length}</b>{" "}
+              {filteredTasks.length === 1 ? "task" : "tasks"} matching
             </p>
           </div>
-          {hasFilters ? (
+          {hasFilters && (
             <button
               type="button"
               onClick={resetFilters}
-              className="rounded border px-3 py-1 text-sm transition hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
             >
-              Reset filters
+              Reset Filters
             </button>
-          ) : null}
+          )}
         </div>
 
-        {hasFilters ? (
+        <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <FilterSelect
+            label="Status"
+            value={taskStatus ?? ""}
+            onChange={(value) => setTaskStatus(value || null)}
+          >
+            <option value="">All statuses</option>
+            <option value="todo">To Do</option>
+            <option value="in_progress">In Progress</option>
+            <option value="done">Done</option>
+          </FilterSelect>
+
+          <FilterSelect
+            label="Priority"
+            value={priority ?? ""}
+            onChange={(value) => setPriority((value || null) as TaskPriorityValue | null)}
+          >
+            <option value="">All priorities</option>
+            <option value="high">High (overdue)</option>
+            <option value="medium">Medium (due soon)</option>
+            <option value="low">Low</option>
+            <option value="none">No priority (done)</option>
+          </FilterSelect>
+
+          {isOwner && (
+            <FilterSelect
+              label="Assigned to"
+              value={memberId === null ? "" : String(memberId)}
+              onChange={(value) => setMemberId(value ? Number(value) : null)}
+            >
+              <option value="">All assignees</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
+
+          <FilterSelect
+            label="Category"
+            value={category ?? ""}
+            onChange={(value) => setCategory(value || null)}
+          >
+            <option value="">All categories</option>
+            {categoryOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </FilterSelect>
+
+          <FilterSelect
+            label="Client"
+            value={client ?? ""}
+            onChange={(value) => setClient(value || null)}
+          >
+            <option value="">All clients</option>
+            {clientOptions.names.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+            {clientOptions.hasInternal && <option value="__internal">Internal</option>}
+          </FilterSelect>
+
+          <FilterSelect
+            label="Deadline"
+            value={deadline ?? ""}
+            onChange={(value) => setDeadline((value || null) as DeadlineFilter | null)}
+          >
+            <option value="">All deadlines</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due today</option>
+            <option value="next7">Next 7 days</option>
+            <option value="none">No deadline</option>
+          </FilterSelect>
+        </div>
+
+        {hasFilters && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {selectedMember ? (
+            {selectedMember && (
               <FilterChip
-                label={selectedMember.name}
+                label={`Assignee: ${selectedMember.name}`}
                 onRemove={() => setMemberId(null)}
               />
-            ) : null}
-            {status ? (
+            )}
+            {status && (
               <FilterChip
-                label={STATUS_LABELS[status]}
+                label={`View: ${STATUS_LABELS[status]}`}
                 onRemove={() => setStatus(null)}
               />
-            ) : null}
+            )}
+            {taskStatus && (
+              <FilterChip
+                label={`Status: ${statusLabel(taskStatus)}`}
+                onRemove={() => setTaskStatus(null)}
+              />
+            )}
+            {priority && (
+              <FilterChip
+                label={`Priority: ${PRIORITY_LABELS[priority]}`}
+                onRemove={() => setPriority(null)}
+              />
+            )}
+            {category && (
+              <FilterChip
+                label={`Category: ${taskCategoryLabel(category)}`}
+                onRemove={() => setCategory(null)}
+              />
+            )}
+            {client && (
+              <FilterChip
+                label={`Client: ${client === "__internal" ? "Internal" : client}`}
+                onRemove={() => setClient(null)}
+              />
+            )}
+            {deadline && (
+              <FilterChip
+                label={`Deadline: ${DEADLINE_LABELS[deadline]}`}
+                onRemove={() => setDeadline(null)}
+              />
+            )}
           </div>
-        ) : null}
+        )}
 
         {filteredTasks.length ? (
-          <>
-            <div className="mt-3 hidden overflow-x-auto md:block">
-              <table className="min-w-full text-sm">
-                <thead className="bg-zinc-50 text-left">
-                  <tr>
-                    <th className="p-2">Task</th>
-                    <th className="p-2">Client</th>
-                    <th className="p-2">Category</th>
-                    <th className="p-2">Assigned to</th>
-                    <th className="p-2">Due date</th>
-                    <th className="p-2">Priority</th>
-                    <th className="p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTasks.map((task) => {
-                    const overdue = isTaskOverdue(task, today);
-                    const priority = taskPriority(task, today);
-                    return (
-                      <tr key={task.id} className="border-t align-top hover:bg-zinc-50">
-                        <td className="p-2">
-                          <Link
-                            href={`/tasks?task=${task.id}`}
-                            className="font-medium underline-offset-2 hover:underline"
-                          >
-                            {task.title}
-                          </Link>
-                        </td>
-                        <td className="p-2">{task.client_name || "Internal"}</td>
-                        <td className="p-2">{taskCategoryLabel(task.category)}</td>
-                        <td className="p-2">{task.assignee_name || "Unassigned"}</td>
-                        <td className={`p-2 ${overdue ? "font-semibold text-red-700" : ""}`}>
-                          {task.due_date || "-"}
-                          {overdue ? " · Overdue" : ""}
-                        </td>
-                        <td className="p-2">
-                          <span
-                            className={`inline-block rounded px-2 py-0.5 text-xs ${PRIORITY_BADGE[priority.value]}`}
-                          >
-                            {priority.label}
-                          </span>
-                        </td>
-                        <td className="p-2">
-                          <span
-                            className={`inline-block rounded px-2 py-0.5 text-xs ${
-                              STATUS_BADGE[task.status] || "bg-zinc-100 text-zinc-700"
-                            }`}
-                          >
-                            {statusLabel(task.status)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-3 space-y-2 md:hidden">
-              {filteredTasks.map((task) => {
-                const overdue = isTaskOverdue(task, today);
-                const priority = taskPriority(task, today);
-                return (
-                  <div key={task.id} className="rounded border p-3 text-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <Link
-                        href={`/tasks?task=${task.id}`}
-                        className="font-medium underline-offset-2 hover:underline"
-                      >
-                        {task.title}
-                      </Link>
-                      <span
-                        className={`shrink-0 rounded px-2 py-0.5 text-xs ${
-                          STATUS_BADGE[task.status] || "bg-zinc-100 text-zinc-700"
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200/80">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-xs sm:text-sm">
+              <thead className="bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Task Deliverable</th>
+                  <th className="px-4 py-3">Client</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Assigned To</th>
+                  <th className="px-4 py-3">Deadline</th>
+                  <th className="px-4 py-3">Priority</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredTasks.map((task) => {
+                  const overdue = isTaskOverdue(task, today);
+                  const priority = taskPriority(task, today);
+                  return (
+                    <tr key={task.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-slate-900">
+                        <Link
+                          href={`/tasks?task=${task.id}`}
+                          className="hover:text-[#ed8527] transition-colors"
+                        >
+                          #{task.id} {task.title}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 font-medium">
+                        {task.client_name || "Internal"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">
+                        {taskCategoryLabel(task.category)}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {task.assignee_name || "Unassigned"}
+                      </td>
+                      <td
+                        className={`px-4 py-3 ${
+                          overdue ? "font-bold text-rose-600" : "text-slate-600"
                         }`}
                       >
-                        {statusLabel(task.status)}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-zinc-600">
-                      {task.client_name || "Internal"} · {taskCategoryLabel(task.category)}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-zinc-600">
-                      <span>{task.assignee_name || "Unassigned"}</span>
-                      <span className={overdue ? "font-semibold text-red-700" : ""}>
-                        Due {task.due_date || "-"}
-                        {overdue ? " · Overdue" : ""}
-                      </span>
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs ${PRIORITY_BADGE[priority.value]}`}
-                      >
-                        {priority.label} priority
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+                        {task.due_date || "—"}
+                        {overdue ? " (Overdue)" : ""}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block rounded-md border px-2 py-0.5 text-xs ${PRIORITY_BADGE[priority.value]}`}
+                        >
+                          {priority.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block rounded-full border px-2.5 py-0.5 text-xs ${
+                            STATUS_BADGE[task.status] || "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {statusLabel(task.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <div className="mt-3 rounded border border-dashed p-6 text-center text-sm text-zinc-500">
-            <p className="font-medium text-zinc-700">No tasks match these filters.</p>
-            <p className="mt-1">
-              {selectedMember && status
-                ? `${selectedMember.name} has no ${STATUS_LABELS[status].toLowerCase()} tasks.`
-                : selectedMember
-                  ? `${selectedMember.name} has no tasks yet.`
-                  : "There are no tasks in this view yet."}
-            </p>
-            {hasFilters ? (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="mt-3 rounded border bg-white px-3 py-1 transition hover:bg-zinc-50"
-              >
-                Clear filters
-              </button>
-            ) : null}
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+            <p className="font-semibold text-slate-700">No tasks match these filters.</p>
+            <p className="mt-1">Try clearing one or more filters above, or press Reset Filters.</p>
           </div>
         )}
       </section>
@@ -590,12 +790,12 @@ function CountButton({
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded px-2 py-0.5 transition hover:bg-zinc-100 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${
+      className={`inline-block min-w-7 rounded-lg px-2 py-1 text-xs font-bold transition-all cursor-pointer ${
         active
-          ? "bg-zinc-200 font-semibold ring-1 ring-zinc-900"
+          ? "bg-[#12143d] text-white shadow-2xs"
           : highlight
-            ? "font-semibold text-red-700"
-            : ""
+            ? "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
       }`}
     >
       {value}
@@ -603,15 +803,42 @@ function CountButton({
   );
 }
 
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-2xs outline-none transition-colors hover:border-slate-300 focus:border-[#ed8527] focus:ring-2 focus:ring-[#ed8527]/15 cursor-pointer"
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-900 bg-white px-3 py-1 text-xs font-medium">
-      {label}
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+      <span>{label}</span>
       <button
         type="button"
         onClick={onRemove}
         aria-label={`Remove ${label} filter`}
-        className="rounded-full px-1 leading-none hover:bg-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900"
+        className="rounded-full text-slate-400 hover:text-slate-700 cursor-pointer text-sm leading-none"
       >
         ×
       </button>
