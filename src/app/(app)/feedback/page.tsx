@@ -15,6 +15,7 @@ import {
   feedbackStatusLabel,
 } from "@/lib/constants";
 import { getFeedbackTasks } from "@/lib/interaction-service";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 import {
   addFeedbackNoteAction,
   createFeedbackTaskAction,
@@ -79,6 +80,7 @@ export default async function FeedbackPage({
               ru.name recorded_by_name, ru.job_title recorded_by_title,
               u.name assignee_name,
               t.id linked_task_id, t.title linked_task_title, t.status linked_task_status,
+              t.priority linked_task_priority,
               t.due_date linked_task_due
        FROM feedback f
        JOIN clients c ON c.id=f.client_id
@@ -659,7 +661,8 @@ export default async function FeedbackPage({
                       >
                         #{task.id} {task.title}
                       </Link>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                        <TaskPriorityBadge priority={task.priority} />
                         <span>{task.assignee_name || "Unassigned"}</span>
                         <span>·</span>
                         <span className="font-medium text-slate-800">{task.status}</span>

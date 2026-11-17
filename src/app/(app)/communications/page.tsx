@@ -16,6 +16,7 @@ import {
   feedbackPriorityLabel,
 } from "@/lib/constants";
 import { getFeedbackForCommunication } from "@/lib/interaction-service";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 import { CommunicationForm } from "./communication-form";
 import {
   addFeedbackAction,
@@ -66,6 +67,7 @@ export default async function CommunicationsPage({
     .prepare(
       `SELECT cm.*, c.name client_name, u.name recorded_by_name,
               t.id linked_task_id, t.title linked_task_title, t.status linked_task_status,
+              t.priority linked_task_priority,
               t.due_date linked_task_due, a.name linked_task_assignee,
               (SELECT COUNT(*) FROM feedback f WHERE f.communication_id=cm.id) feedback_count
        FROM communications cm
@@ -390,7 +392,7 @@ function CommunicationCard({
       {/* Linked task if present */}
       {row.linked_task_id && (
         <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-[#12143d]">Linked Owner Task:</span>
             <Link
               href={`/tasks?task=${row.linked_task_id}`}
@@ -398,6 +400,7 @@ function CommunicationCard({
             >
               #{row.linked_task_id} {row.linked_task_title}
             </Link>
+            <TaskPriorityBadge priority={row.linked_task_priority} />
           </div>
           <span className="text-slate-500">
             {row.linked_task_assignee} · {row.linked_task_status}

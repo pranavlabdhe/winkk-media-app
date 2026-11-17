@@ -95,6 +95,7 @@ export function initDb() {
       assigned_by INTEGER NOT NULL,
       status TEXT NOT NULL CHECK(status IN ('todo','in_progress','done')),
       category TEXT NOT NULL DEFAULT 'other',
+      priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('high','medium','low')),
       due_date TEXT,
       origin_module TEXT NOT NULL DEFAULT 'tasks',
       linked_blogger_id INTEGER,
@@ -102,6 +103,7 @@ export function initDb() {
       follow_up_of_task_id INTEGER,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(client_id) REFERENCES clients(id) ON DELETE SET NULL,
       FOREIGN KEY(assigned_to) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(assigned_by) REFERENCES users(id) ON DELETE CASCADE
@@ -239,17 +241,28 @@ export function initDb() {
   ensureColumn("users", "department", "TEXT");
   ensureColumn("users", "is_active", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("tasks", "category", "TEXT NOT NULL DEFAULT 'other'");
+  // Priority is a stored, user-set task property. Tasks created before this
+  // column existed are backfilled to Medium below.
+  ensureColumn("tasks", "priority", "TEXT NOT NULL DEFAULT 'medium'");
   ensureColumn("tasks", "updated_at", "TEXT");
   ensureColumn("tasks", "origin_module", "TEXT NOT NULL DEFAULT 'tasks'");
   ensureColumn("tasks", "linked_blogger_id", "INTEGER");
   ensureColumn("tasks", "activity_at", "TEXT");
   ensureColumn("tasks", "follow_up_of_task_id", "INTEGER");
+  // Tracks when the task was last handed to its current assignee. Existing
+  // rows fall back to their creation date, which is when they were assigned.
+  ensureColumn("tasks", "assigned_at", "TEXT");
   ensureColumn("posts", "task_id", "INTEGER");
   ensureColumn("feedback", "task_id", "INTEGER");
   ensureColumn("communications", "task_id", "INTEGER");
   ensureColumn("blogger_assignments", "task_id", "INTEGER");
   ensureColumn("meetings", "task_id", "INTEGER");
   db.prepare("UPDATE tasks SET updated_at = COALESCE(updated_at, created_at)").run();
+  db.prepare("UPDATE tasks SET assigned_at = COALESCE(assigned_at, created_at)").run();
+  // Legacy rows and unknown values always fall back to the Medium default.
+  db.prepare(
+    "UPDATE tasks SET priority = 'medium' WHERE priority IS NULL OR priority = '' OR priority NOT IN ('high','medium','low')"
+  ).run();
 
   // Communication is the interaction record; feedback is a specialised record
   // created from it. These columns keep the interaction history immutable while
@@ -273,6 +286,8 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
     CREATE INDEX IF NOT EXISTS idx_tasks_client_id ON tasks(client_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+    CREATE INDEX IF NOT EXISTS idx_tasks_assigned_at ON tasks(assigned_at);
     CREATE INDEX IF NOT EXISTS idx_task_updates_task_id ON task_updates(task_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_client_team_unique ON client_team(client_id, user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_task_unique ON posts(task_id) WHERE task_id IS NOT NULL;
@@ -288,6 +303,26 @@ export function initDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_comm_title_unique
       ON feedback(communication_id, lower(title))
       WHERE communication_id IS NOT NULL AND title IS NOT NULL;
+  `);
+
+  // Keep assigned_at accurate no matter which code path creates or reassigns a
+  // task (task board, feedback, meeting, communication, seeded demo data).
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS trg_tasks_assigned_at_insert
+    AFTER INSERT ON tasks
+    FOR EACH ROW
+    WHEN NEW.assigned_at IS NULL
+    BEGIN
+      UPDATE tasks SET assigned_at = COALESCE(NEW.created_at, CURRENT_TIMESTAMP) WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_tasks_assigned_at_reassign
+    AFTER UPDATE OF assigned_to ON tasks
+    FOR EACH ROW
+    WHEN NEW.assigned_to IS NOT OLD.assigned_to
+    BEGIN
+      UPDATE tasks SET assigned_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
   `);
 
   migrateInteractions();

@@ -24,6 +24,25 @@ export const TASK_STATUSES = [
   { value: "done", label: "Done" },
 ] as const;
 
+/** Stored task priority. Every task always has one of these values. */
+export const TASK_PRIORITIES = [
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+] as const;
+
+export type TaskPriorityValue = (typeof TASK_PRIORITIES)[number]["value"];
+
+export const DEFAULT_TASK_PRIORITY: TaskPriorityValue = "medium";
+
+export function taskPriorityLabel(value: string | null | undefined) {
+  return TASK_PRIORITIES.find((item) => item.value === value)?.label || "Medium";
+}
+
+export function isTaskPriority(value: string): value is TaskPriorityValue {
+  return TASK_PRIORITIES.some((item) => item.value === value);
+}
+
 export function taskCategoryLabel(value: string | null | undefined) {
   return TASK_CATEGORIES.find((item) => item.value === value)?.label || value || "Other";
 }

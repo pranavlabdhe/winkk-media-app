@@ -2,7 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { taskCategoryLabel } from "@/lib/constants";
+import { taskCategoryLabel, taskPriorityLabel } from "@/lib/constants";
 import {
   ensureTaskForModule,
   getLinkableTasks,
@@ -10,6 +10,7 @@ import {
   logActivity,
   syncModuleToTask,
 } from "@/lib/activity-service";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 
 function refreshUnified(clientId?: number | null) {
   for (const path of ["/meetings", "/tasks", "/my-work", "/dashboard", "/clients"]) {
@@ -179,6 +180,7 @@ export default async function MeetingsPage({
     .prepare(
       `SELECT m.*, c.name client_name,
               t.id linked_task_id, t.title linked_task_title, t.status linked_task_status,
+              t.priority linked_task_priority,
               t.due_date linked_task_due, u.name linked_task_assignee
        FROM meetings m
        JOIN clients c ON c.id=m.client_id
@@ -364,7 +366,7 @@ export default async function MeetingsPage({
                 <option value="">Auto-provision meeting task</option>
                 {linkableTasks.map((task) => (
                   <option key={task.id} value={task.id}>
-                    #{task.id}: {task.title} · {task.client_name || "Internal"}
+                    #{task.id}: {task.title} · {task.client_name || "Internal"} · {taskPriorityLabel(task.priority)} priority
                   </option>
                 ))}
               </select>
@@ -438,13 +440,16 @@ export default async function MeetingsPage({
                 {m.linked_task_id && (
                   <div className="text-xs rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 flex items-center justify-between">
                     <div>
-                      <span className="font-semibold text-slate-600">Meeting Task:</span>{" "}
-                      <Link
-                        href={`/tasks?task=${m.linked_task_id}`}
-                        className="font-bold text-[#12143d] hover:text-[#ed8527]"
-                      >
-                        #{m.linked_task_id} {m.linked_task_title}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-semibold text-slate-600">Meeting Task:</span>{" "}
+                        <Link
+                          href={`/tasks?task=${m.linked_task_id}`}
+                          className="font-bold text-[#12143d] hover:text-[#ed8527]"
+                        >
+                          #{m.linked_task_id} {m.linked_task_title}
+                        </Link>
+                        <TaskPriorityBadge priority={m.linked_task_priority} />
+                      </div>
                     </div>
                     <span className="text-[11px] text-slate-500">
                       {m.linked_task_assignee} · {m.linked_task_status}
@@ -470,9 +475,12 @@ export default async function MeetingsPage({
                         >
                           #{task.id} {task.title}
                         </Link>
-                        <span className="text-[11px] text-slate-500">
-                          {task.assignee_name} · {task.status.replace("_", " ")}
-                        </span>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                          <TaskPriorityBadge priority={task.priority} />
+                          <span>
+                            {task.assignee_name} · {task.status.replace("_", " ")}
+                          </span>
+                        </div>
                       </div>
                     ))}
                     {!(followUpsByParent[m.linked_task_id] || []).length && (

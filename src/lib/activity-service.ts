@@ -267,7 +267,7 @@ export function getUnlinkedModuleRecords(): Array<{
 export function getLinkableTasks(type: ModuleType) {
   return db
     .prepare(
-      `SELECT t.id,t.title,t.category,t.status,c.name client_name
+      `SELECT t.id,t.title,t.category,t.status,t.priority,c.name client_name
        FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
        WHERE t.id NOT IN (SELECT task_id FROM ${MODULE_TABLE[type]} WHERE task_id IS NOT NULL)
        ORDER BY t.created_at DESC LIMIT 100`
@@ -277,6 +277,7 @@ export function getLinkableTasks(type: ModuleType) {
     title: string;
     category: string;
     status: string;
+    priority: string | null;
     client_name: string | null;
   }>;
 }

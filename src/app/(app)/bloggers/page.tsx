@@ -2,7 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { taskCategoryLabel } from "@/lib/constants";
+import { taskCategoryLabel, taskPriorityLabel } from "@/lib/constants";
 import {
   ensureTaskForModule,
   getLinkableTasks,
@@ -10,6 +10,7 @@ import {
   logActivity,
   syncModuleToTask,
 } from "@/lib/activity-service";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 
 function refreshUnified(clientId?: number | null) {
   for (const path of ["/bloggers", "/tasks", "/my-work", "/dashboard", "/clients"]) {
@@ -142,6 +143,7 @@ export default async function BloggersPage({
     .prepare(
       `SELECT ba.*, b.name blogger_name, b.handle blogger_handle, c.name client_name,
               t.id linked_task_id, t.title linked_task_title, t.status linked_task_status,
+              t.priority linked_task_priority,
               t.due_date linked_task_due, u.name linked_task_assignee
        FROM blogger_assignments ba
        JOIN bloggers b ON b.id=ba.blogger_id
@@ -381,7 +383,7 @@ export default async function BloggersPage({
                 <option value="">Auto-create linked task for collaboration</option>
                 {linkableTasks.map((task) => (
                   <option key={task.id} value={task.id}>
-                    #{task.id}: {task.title} · {task.client_name || "Internal"}
+                    #{task.id}: {task.title} · {task.client_name || "Internal"} · {taskPriorityLabel(task.priority)} priority
                   </option>
                 ))}
               </select>
@@ -441,7 +443,7 @@ export default async function BloggersPage({
               {/* Linked Task Context */}
               {a.linked_task_id && (
                 <div className="text-xs rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 flex items-center justify-between">
-                  <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-semibold text-slate-600">Task:</span>{" "}
                     <Link
                       href={`/tasks?task=${a.linked_task_id}`}
@@ -449,6 +451,7 @@ export default async function BloggersPage({
                     >
                       #{a.linked_task_id} {a.linked_task_title}
                     </Link>
+                    <TaskPriorityBadge priority={a.linked_task_priority} />
                   </div>
                   <span className="text-[11px] text-slate-500">
                     {a.linked_task_assignee} · {a.linked_task_status}

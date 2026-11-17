@@ -1,33 +1,38 @@
-export type TaskPriorityValue = "high" | "medium" | "low" | "none";
+import {
+  DEFAULT_TASK_PRIORITY,
+  TASK_PRIORITIES,
+  isTaskPriority,
+  type TaskPriorityValue,
+} from "./constants";
+
+export type { TaskPriorityValue };
 
 export type TaskPriority = {
   value: TaskPriorityValue;
   label: string;
 };
 
-const DAY_MS = 86_400_000;
-
-function toUtc(isoDate: string) {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return Date.UTC(year, month - 1, day);
+/**
+ * Priority is a stored task property. Records created before the column
+ * existed (or with an unknown value) fall back to Medium so a task is never
+ * displayed without a priority.
+ */
+export function normalizeTaskPriority(value: unknown): TaskPriorityValue {
+  return typeof value === "string" && isTaskPriority(value) ? value : DEFAULT_TASK_PRIORITY;
 }
 
-/**
- * Priority is derived from the task deadline so it stays accurate when due
- * dates change. It is intentionally not stored, which avoids stale values.
- */
-export function taskPriority(
-  task: { status: string; due_date: string | null },
-  today: string
-): TaskPriority {
-  if (task.status === "done") return { value: "none", label: "—" };
-  if (!task.due_date) return { value: "low", label: "Low" };
+export function taskPriority(task: { priority?: string | null }): TaskPriority {
+  const value = normalizeTaskPriority(task.priority);
+  return {
+    value,
+    label: TASK_PRIORITIES.find((item) => item.value === value)?.label || "Medium",
+  };
+}
 
-  const daysUntilDue = Math.round((toUtc(task.due_date) - toUtc(today)) / DAY_MS);
-
-  if (daysUntilDue < 0) return { value: "high", label: "High" };
-  if (daysUntilDue <= 3) return { value: "medium", label: "Medium" };
-  return { value: "low", label: "Low" };
+/** Sort helper: High (0) before Medium (1) before Low (2). */
+export function taskPriorityRank(value: string | null | undefined) {
+  const priority = normalizeTaskPriority(value);
+  return TASK_PRIORITIES.findIndex((item) => item.value === priority);
 }
 
 export function isTaskOverdue(

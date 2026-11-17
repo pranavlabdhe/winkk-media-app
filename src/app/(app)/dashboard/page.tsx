@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { MODULE_LABELS } from "@/lib/activity-service";
 import { clientVisibilityScope } from "@/lib/visibility";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 import DashboardFilters, {
   type DashboardCounts,
   type DashboardMember,
@@ -25,6 +26,8 @@ type RecentActivity = {
   client_name: string | null;
   created_at: string;
   task_id: number | null;
+  task_title: string | null;
+  task_priority: string | null;
   user_name: string | null;
 };
 
@@ -38,7 +41,7 @@ export default async function DashboardPage() {
   const tasks = db
     .prepare(
       `SELECT t.id, t.title, c.name client_name, t.category, t.assigned_to,
-              u.name assignee_name, t.due_date, t.status
+              u.name assignee_name, t.due_date, t.status, t.priority
        FROM tasks t
        LEFT JOIN clients c ON c.id=t.client_id
        LEFT JOIN users u ON u.id=t.assigned_to
@@ -94,10 +97,12 @@ export default async function DashboardPage() {
 
   const recentActivity = db
     .prepare(
-      `SELECT al.*, u.name user_name, c.name client_name
+      `SELECT al.*, u.name user_name, c.name client_name,
+              t.title task_title, t.priority task_priority
        FROM activity_log al
        LEFT JOIN users u ON u.id=al.user_id
        LEFT JOIN clients c ON c.id=al.client_id
+       LEFT JOIN tasks t ON t.id=al.task_id
        ORDER BY al.created_at DESC
        LIMIT 10`
     )
@@ -191,12 +196,15 @@ export default async function DashboardPage() {
                 <span>•</span>
                 <span>{item.created_at}</span>
                 {item.task_id && (
-                  <Link
-                    href={`/tasks?task=${item.task_id}`}
-                    className="font-bold text-[#ed8527] hover:underline"
-                  >
-                    Task #{item.task_id} →
-                  </Link>
+                  <>
+                    <Link
+                      href={`/tasks?task=${item.task_id}`}
+                      className="font-bold text-[#ed8527] hover:underline"
+                    >
+                      {item.task_title || `Task #${item.task_id}`} →
+                    </Link>
+                    <TaskPriorityBadge priority={item.task_priority} />
+                  </>
                 )}
               </div>
             </div>

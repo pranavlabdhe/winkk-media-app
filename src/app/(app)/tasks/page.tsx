@@ -3,9 +3,11 @@ import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import {
   TASK_CATEGORIES,
+  TASK_PRIORITIES,
   TASK_STATUSES,
   feedbackStatusLabel,
   isTaskCategory,
+  isTaskPriority,
   isTaskStatus,
   taskCategoryLabel,
 } from "@/lib/constants";
@@ -15,6 +17,15 @@ import {
   getUnlinkedModuleRecords,
 } from "@/lib/activity-service";
 import { getFeedbackForTasks } from "@/lib/interaction-service";
+import TaskPriorityBadge from "@/components/task-priority-badge";
+import {
+  addDaysIso,
+  assignmentRangeLabel,
+  formatIsoDate,
+  isIsoDate,
+  taskAssignedDate,
+  todayIso,
+} from "@/lib/task-assignment";
 import {
   addTaskUpdateAction,
   createTaskAction,
@@ -32,6 +43,18 @@ const MODULE_PATHS: Record<string, string> = {
   meeting: "/meetings",
 };
 
+const STATUS_BADGES: Record<string, { label: string; badge: string }> = {
+  todo: { label: "To Do", badge: "bg-slate-100 text-slate-700 border-slate-200" },
+  in_progress: {
+    label: "In Progress",
+    badge: "bg-amber-50 text-amber-800 border-amber-200 font-semibold",
+  },
+  done: {
+    label: "Completed",
+    badge: "bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold",
+  },
+};
+
 export default async function TasksPage({
   searchParams,
 }: {
@@ -40,7 +63,10 @@ export default async function TasksPage({
     assignee?: string;
     category?: string;
     status?: string;
+    priority?: string;
     task?: string;
+    assigned_from?: string;
+    assigned_to?: string;
   }>;
 }) {
   const session = await getSession();
@@ -55,7 +81,18 @@ export default async function TasksPage({
         : null;
   const categoryFilter = sp.category && isTaskCategory(sp.category) ? sp.category : null;
   const statusFilter = sp.status && isTaskStatus(sp.status) ? sp.status : null;
+  const priorityFilter = sp.priority && isTaskPriority(sp.priority) ? sp.priority : null;
   const taskFilter = sp.task ? Number(sp.task) || null : null;
+
+  const today = todayIso();
+
+  // Assignment-date filter: both dates optionally define a closed range.
+  let assignedFrom = isIsoDate(sp.assigned_from) ? sp.assigned_from : null;
+  let assignedTo = isIsoDate(sp.assigned_to) ? sp.assigned_to : null;
+  if (assignedFrom && assignedTo && assignedFrom > assignedTo) {
+    [assignedFrom, assignedTo] = [assignedTo, assignedFrom];
+  }
+  const hasAssignmentDateFilter = !!(assignedFrom || assignedTo);
 
   const users = db
     .prepare(
@@ -88,6 +125,18 @@ export default async function TasksPage({
     where.push("t.status = ?");
     params.push(statusFilter);
   }
+  if (priorityFilter) {
+    where.push("t.priority = ?");
+    params.push(priorityFilter);
+  }
+  if (assignedFrom) {
+    where.push("date(COALESCE(t.assigned_at, t.created_at)) >= ?");
+    params.push(assignedFrom);
+  }
+  if (assignedTo) {
+    where.push("date(COALESCE(t.assigned_at, t.created_at)) <= ?");
+    params.push(assignedTo);
+  }
 
   const tasks = db
     .prepare(
@@ -98,6 +147,7 @@ export default async function TasksPage({
        LEFT JOIN clients c ON c.id=t.client_id
        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
        ORDER BY CASE t.status WHEN 'todo' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
+                CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
                 t.due_date IS NULL, t.due_date, t.created_at DESC`
     )
     .all(...params) as any[];
@@ -115,14 +165,14 @@ export default async function TasksPage({
   const parentTaskIds = tasks
     .map((task) => task.follow_up_of_task_id)
     .filter(Boolean) as number[];
-  let parentTitles: Record<number, string> = {};
+  let parentTitles: Record<number, { title: string; priority: string | null }> = {};
   if (parentTaskIds.length) {
     const parents = db
       .prepare(
-        `SELECT id,title FROM tasks WHERE id IN (${parentTaskIds.map(() => "?").join(",")})`
+        `SELECT id,title,priority FROM tasks WHERE id IN (${parentTaskIds.map(() => "?").join(",")})`
       )
       .all(...parentTaskIds) as any[];
-    parentTitles = Object.fromEntries(parents.map((row) => [row.id, row.title]));
+    parentTitles = Object.fromEntries(parents.map((row) => [row.id, row]));
   }
 
   const updates = db
@@ -143,7 +193,15 @@ export default async function TasksPage({
           ? "strategy"
           : "other";
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Assignments made on the current day, visible in the fixed daily section.
+  const assignedToday = tasks
+    .filter((task) => taskAssignedDate(task) === today)
+    .sort((a, b) =>
+      String(b.assigned_at || b.created_at || "").localeCompare(
+        String(a.assigned_at || a.created_at || "")
+      )
+    );
+  const assignedTodayLabel = formatIsoDate(today);
 
   // Statistics calculation for KPI summary bar
   const totalCount = tasks.length;
@@ -153,6 +211,30 @@ export default async function TasksPage({
   const overdueCount = tasks.filter(
     (t) => t.status !== "done" && t.due_date && t.due_date < today
   ).length;
+
+  const datePresets = [
+    { label: "Any date", from: null, to: null },
+    { label: "Today", from: today, to: today },
+    { label: "Last 7 days", from: addDaysIso(today, -6), to: today },
+    { label: "Last 30 days", from: addDaysIso(today, -29), to: today },
+  ];
+
+  function presetHref(from: string | null, to: string | null) {
+    const search = new URLSearchParams();
+    if (sp.client) search.set("client", sp.client);
+    if (sp.assignee) search.set("assignee", sp.assignee);
+    if (sp.category) search.set("category", sp.category);
+    if (sp.status) search.set("status", sp.status);
+    if (sp.priority) search.set("priority", sp.priority);
+    if (sp.task) search.set("task", sp.task);
+    if (from) search.set("assigned_from", from);
+    if (to) search.set("assigned_to", to);
+    const qs = search.toString();
+    return qs ? `/tasks?${qs}` : "/tasks";
+  }
+
+  const isPresetActive = (from: string | null, to: string | null) =>
+    (assignedFrom || null) === from && (assignedTo || null) === to;
 
   return (
     <div className="space-y-6">
@@ -211,120 +293,6 @@ export default async function TasksPage({
           </Link>
         </div>
       )}
-
-      {/* Filter Toolbar */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
-            <svg className="h-3.5 w-3.5 text-[#ed8527]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            Filter & Search Tasks
-          </div>
-          {(sp.client || sp.assignee || sp.category || sp.status || sp.task) && (
-            <Link
-              href="/tasks"
-              className="text-xs font-semibold text-[#ed8527] hover:underline"
-            >
-              Reset All Filters
-            </Link>
-          )}
-        </div>
-
-        <form
-          key={`filters:${sp.client || ""}:${sp.assignee || ""}:${sp.category || ""}:${sp.status || ""}`}
-          method="get"
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
-        >
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-              Client
-            </label>
-            <select
-              name="client"
-              defaultValue={sp.client || ""}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
-            >
-              <option value="">All Clients</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-              Assignee
-            </label>
-            <select
-              name="assignee"
-              defaultValue={sp.assignee || ""}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
-            >
-              <option value="">All Team Members</option>
-              <option value="me">Assigned to me ({session?.name})</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-              Category
-            </label>
-            <select
-              name="category"
-              defaultValue={sp.category || ""}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
-            >
-              <option value="">All Categories</option>
-              {TASK_CATEGORIES.map((category) => (
-                <option key={category.value} value={category.value}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-              Status
-            </label>
-            <select
-              name="status"
-              defaultValue={sp.status || ""}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
-            >
-              <option value="">All Statuses</option>
-              {TASK_STATUSES.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-end gap-2">
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-[#12143d] px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-[#20245e] transition-colors cursor-pointer"
-            >
-              Apply Filter
-            </button>
-            <Link
-              href="/tasks"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
-            >
-              Clear
-            </Link>
-          </div>
-        </form>
-      </div>
 
       {/* Task Creation Form Card */}
       <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
@@ -405,7 +373,7 @@ export default async function TasksPage({
           </div>
 
           {/* Secondary metadata row */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Client (Account)
@@ -447,6 +415,23 @@ export default async function TasksPage({
                 {TASK_STATUSES.map((status) => (
                   <option key={status.value} value={status.value}>
                     {status.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Priority
+              </label>
+              <select
+                name="priority"
+                defaultValue="medium"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 shadow-2xs transition-all focus:border-[#ed8527] focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+              >
+                {TASK_PRIORITIES.map((priority) => (
+                  <option key={priority.value} value={priority.value}>
+                    {priority.label}
                   </option>
                 ))}
               </select>
@@ -531,6 +516,365 @@ export default async function TasksPage({
         </form>
       </div>
 
+      {/* Filter Toolbar */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+            <svg className="h-3.5 w-3.5 text-[#ed8527]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Filter & Search Tasks
+          </div>
+          {(sp.client ||
+            sp.assignee ||
+            sp.category ||
+            sp.status ||
+            sp.priority ||
+            sp.task ||
+            hasAssignmentDateFilter) && (
+            <Link
+              href="/tasks"
+              className="text-xs font-semibold text-[#ed8527] hover:underline"
+            >
+              Reset All Filters
+            </Link>
+          )}
+        </div>
+
+        {hasAssignmentDateFilter && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ed8527]/30 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-[#d97116]">
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {assignmentRangeLabel(assignedFrom, assignedTo)}
+              <Link
+                href={presetHref(null, null)}
+                aria-label="Clear assignment date filter"
+                className="ml-1 rounded-full px-1 text-sm leading-none text-[#d97116] hover:bg-[#ed8527]/15"
+              >
+                ×
+              </Link>
+            </span>
+          </div>
+        )}
+
+        <form
+          key={`filters:${sp.client || ""}:${sp.assignee || ""}:${sp.category || ""}:${sp.status || ""}:${sp.priority || ""}:${assignedFrom || ""}:${assignedTo || ""}`}
+          method="get"
+          className="space-y-4"
+        >
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Client
+            </label>
+            <select
+              name="client"
+              defaultValue={sp.client || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              <option value="">All Clients</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Assignee
+            </label>
+            <select
+              name="assignee"
+              defaultValue={sp.assignee || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              <option value="">All Team Members</option>
+              <option value="me">Assigned to me ({session?.name})</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Category
+            </label>
+            <select
+              name="category"
+              defaultValue={sp.category || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              <option value="">All Categories</option>
+              {TASK_CATEGORIES.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Status
+            </label>
+            <select
+              name="status"
+              defaultValue={sp.status || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              <option value="">All Statuses</option>
+              {TASK_STATUSES.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+              Priority
+            </label>
+            <select
+              name="priority"
+              defaultValue={sp.priority || ""}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+            >
+              <option value="">All Priorities</option>
+              {TASK_PRIORITIES.map((priority) => (
+                <option key={priority.value} value={priority.value}>
+                  {priority.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-[#12143d] px-4 py-2 text-xs font-bold text-white shadow-2xs hover:bg-[#20245e] transition-colors cursor-pointer"
+            >
+              Apply Filter
+            </button>
+            <Link
+              href="/tasks"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+            >
+              Clear
+            </Link>
+          </div>
+          </div>
+
+          {/* Assignment date range */}
+          <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="w-full sm:w-44">
+                <label
+                  htmlFor="assigned_from"
+                  className="block text-[11px] font-bold text-slate-600 uppercase mb-1"
+                >
+                  Assigned From
+                </label>
+                <input
+                  id="assigned_from"
+                  name="assigned_from"
+                  type="date"
+                  max={assignedTo || undefined}
+                  defaultValue={assignedFrom || ""}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+                />
+              </div>
+              <span className="hidden pb-2 text-xs font-medium text-slate-400 sm:inline">→</span>
+              <div className="w-full sm:w-44">
+                <label
+                  htmlFor="assigned_to"
+                  className="block text-[11px] font-bold text-slate-600 uppercase mb-1"
+                >
+                  Assigned To
+                </label>
+                <input
+                  id="assigned_to"
+                  name="assigned_to"
+                  type="date"
+                  min={assignedFrom || undefined}
+                  defaultValue={assignedTo || ""}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-medium text-slate-800 transition-all focus:border-[#ed8527] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ed8527]/20"
+                />
+              </div>
+              <p className="max-w-[260px] pb-1 text-[11px] leading-relaxed text-slate-400">
+                Assignment date (created or reassigned). Same date in both fields = single day.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Quick:
+              </span>
+              {datePresets.map((preset) => {
+                const active = isPresetActive(preset.from, preset.to);
+                return (
+                  <Link
+                    key={preset.label}
+                    href={presetHref(preset.from, preset.to)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                      active
+                        ? "border-[#ed8527]/40 bg-orange-50 text-[#d97116]"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    {preset.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* Task Assigned Today */}
+      <details className="group rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+        <summary className="flex cursor-pointer list-none select-none flex-col gap-3 border-b border-transparent p-5 transition-colors hover:bg-slate-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ed8527]/30 sm:flex-row sm:items-center sm:justify-between group-open:border-slate-100 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </span>
+            <span className="block">
+              <span className="block text-sm font-bold uppercase tracking-wider text-slate-500">
+                Task Assigned Today ({assignedToday.length})
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Work handed out on {assignedTodayLabel} ·{" "}
+                <span className="group-open:hidden">click to view.</span>
+                <span className="hidden group-open:inline">click to collapse.</span>
+              </span>
+            </span>
+          </span>
+          <span className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+              {assignedToday.length} {assignedToday.length === 1 ? "assignment" : "assignments"} today
+            </span>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-transform duration-200 group-open:rotate-180">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </span>
+          </span>
+        </summary>
+
+        {assignedToday.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <th className="px-5 py-2.5">Task</th>
+                  <th className="px-3 py-2.5">Assigned To</th>
+                  <th className="px-3 py-2.5">Assigned By</th>
+                  <th className="px-3 py-2.5">Priority</th>
+                  <th className="px-3 py-2.5">Due Date</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-5 py-2.5 text-right">Assigned</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {assignedToday.map((task) => {
+                  const status = STATUS_BADGES[task.status] || {
+                    label: task.status,
+                    badge: "bg-slate-100 text-slate-700 border-slate-200",
+                  };
+                  const isOverdue =
+                    task.status !== "done" && task.due_date && task.due_date < today;
+
+                  return (
+                    <tr key={task.id} className="transition-colors hover:bg-slate-50/70">
+                      <td className="px-5 py-3">
+                        <Link
+                          href={`/tasks?task=${task.id}`}
+                          className="group inline-flex items-center gap-2"
+                        >
+                          <span className="font-mono text-[11px] font-bold text-slate-400">
+                            #{task.id}
+                          </span>
+                          <span className="font-semibold text-slate-900 group-hover:text-[#ed8527]">
+                            {task.title}
+                          </span>
+                        </Link>
+                        <div className="mt-0.5 text-[11px] text-slate-400">
+                          {task.client_name || "Internal"} · {taskCategoryLabel(task.category)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="font-semibold text-slate-800">{task.assignee_name}</div>
+                        {task.assignee_title && (
+                          <div className="text-[11px] text-slate-400">{task.assignee_title}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">{task.assigner_name}</td>
+                      <td className="px-3 py-3">
+                        <TaskPriorityBadge priority={task.priority} />
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {task.due_date ? (
+                          <span className={isOverdue ? "font-bold text-rose-600" : "text-slate-600"}>
+                            {task.due_date}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] ${status.badge}`}
+                        >
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3 text-right text-[11px] text-slate-400">
+                        {formatIsoDate(taskAssignedDate(task))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-5 py-10 text-center">
+            <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <p className="mt-2 text-sm font-semibold text-slate-700">
+              {hasAssignmentDateFilter
+                ? "No tasks assigned today match the current filters."
+                : "No tasks have been assigned today yet."}
+            </p>
+            <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+              {hasAssignmentDateFilter
+                ? "The assignment date filter excludes today. Clear the dates to see today's assignments."
+                : "New tasks and reassignments made today will appear here automatically."}
+            </p>
+            {hasAssignmentDateFilter && (
+              <Link
+                href={presetHref(null, null)}
+                className="mt-3 inline-flex rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#12143d] shadow-2xs transition-colors hover:bg-slate-50"
+              >
+                Clear date filter
+              </Link>
+            )}
+          </div>
+        )}
+      </details>
+
       {/* Task List */}
       <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
@@ -585,6 +929,8 @@ export default async function TasksPage({
                       {task.title}
                     </h4>
 
+                    <TaskPriorityBadge priority={task.priority} />
+
                     {task.origin_module && task.origin_module !== "tasks" && (
                       <span className="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                         Via {MODULE_LABELS[task.origin_module as keyof typeof MODULE_LABELS] || task.origin_module}
@@ -594,6 +940,12 @@ export default async function TasksPage({
                     <span className="rounded-full bg-[#12143d]/5 border border-[#12143d]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#12143d]">
                       {taskCategoryLabel(task.category)}
                     </span>
+
+                    {taskAssignedDate(task) === today && (
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        Assigned today
+                      </span>
+                    )}
                   </div>
 
                   {/* Client & Assignee Context */}
@@ -645,8 +997,9 @@ export default async function TasksPage({
                         href={`/tasks?task=${task.follow_up_of_task_id}`}
                         className="font-semibold text-[#ed8527] hover:underline"
                       >
-                        {parentTitles[task.follow_up_of_task_id] || `Task #${task.follow_up_of_task_id}`}
+                        {parentTitles[task.follow_up_of_task_id]?.title || `Task #${task.follow_up_of_task_id}`}
                       </Link>
+                      <TaskPriorityBadge priority={parentTitles[task.follow_up_of_task_id]?.priority} />
                     </div>
                   )}
                 </div>
@@ -795,7 +1148,7 @@ export default async function TasksPage({
 
               {/* Quick Update Toolbar Form */}
               <form
-                key={`${task.id}:${task.status}:${task.assigned_to}:${task.category}:${task.due_date || ""}`}
+                key={`${task.id}:${task.status}:${task.assigned_to}:${task.category}:${task.priority}:${task.due_date || ""}`}
                 action={updateTaskAction}
                 className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-2xs"
               >
@@ -809,7 +1162,7 @@ export default async function TasksPage({
                 </div>
 
                 <input type="hidden" name="id" value={task.id} />
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
                       Status
@@ -857,6 +1210,23 @@ export default async function TasksPage({
                       {TASK_CATEGORIES.map((category) => (
                         <option key={category.value} value={category.value}>
                           {category.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
+                      Priority
+                    </label>
+                    <select
+                      name="priority"
+                      defaultValue={task.priority || "medium"}
+                      className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 focus:border-[#ed8527] focus:outline-none"
+                    >
+                      {TASK_PRIORITIES.map((priority) => (
+                        <option key={priority.value} value={priority.value}>
+                          {priority.label}
                         </option>
                       ))}
                     </select>

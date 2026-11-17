@@ -8,6 +8,7 @@ import {
   taskCategoryLabel,
 } from "@/lib/constants";
 import { MODULE_LABELS, getLinkedModules } from "@/lib/activity-service";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 
 function Section({
   title,
@@ -119,8 +120,9 @@ export default async function ClientDetailPage({
   for (const link of linkedModules) (linkedByTask[link.task_id] ||= []).push(link);
   const timeline = db
     .prepare(
-      `SELECT al.*, u.name user_name
+      `SELECT al.*, u.name user_name, t.title task_title, t.priority task_priority
        FROM activity_log al LEFT JOIN users u ON u.id=al.user_id
+       LEFT JOIN tasks t ON t.id=al.task_id
        WHERE al.client_id=?
        ORDER BY al.created_at DESC
        LIMIT 40`
@@ -229,12 +231,15 @@ export default async function ClientDetailPage({
                       <span>•</span>
                       <span>{item.created_at}</span>
                       {item.task_id && (
-                        <Link
-                          href={`/tasks?task=${item.task_id}`}
-                          className="font-bold text-[#ed8527] hover:underline"
-                        >
-                          Task #{item.task_id}
-                        </Link>
+                        <>
+                          <Link
+                            href={`/tasks?task=${item.task_id}`}
+                            className="font-bold text-[#ed8527] hover:underline"
+                          >
+                            {item.task_title || `Task #${item.task_id}`}
+                          </Link>
+                          <TaskPriorityBadge priority={item.task_priority} />
+                        </>
                       )}
                     </div>
                   </div>
@@ -329,6 +334,7 @@ export default async function ClientDetailPage({
                   #{task.id} {task.title}
                 </Link>
                 <div className="flex items-center gap-2 shrink-0">
+                  <TaskPriorityBadge priority={task.priority} />
                   <span className="text-slate-500">{task.assignee_name}</span>
                   <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200">
                     {task.status.replace("_", " ")}

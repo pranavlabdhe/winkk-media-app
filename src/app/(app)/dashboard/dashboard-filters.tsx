@@ -2,12 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { TASK_CATEGORIES, taskCategoryLabel } from "@/lib/constants";
-import {
-  isTaskOverdue,
-  taskPriority,
-  type TaskPriorityValue,
-} from "@/lib/task-priority";
+import { TASK_CATEGORIES, TASK_PRIORITIES, taskCategoryLabel, type TaskPriorityValue } from "@/lib/constants";
+import { isTaskOverdue, taskPriority } from "@/lib/task-priority";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 
 export type DashboardTask = {
   id: number;
@@ -18,6 +15,7 @@ export type DashboardTask = {
   assignee_name: string | null;
   due_date: string | null;
   status: string;
+  priority: string | null;
 };
 
 export type DashboardMember = {
@@ -57,7 +55,6 @@ const PRIORITY_LABELS: Record<TaskPriorityValue, string> = {
   high: "High",
   medium: "Medium",
   low: "Low",
-  none: "No priority",
 };
 
 type Props = {
@@ -92,13 +89,6 @@ const STATUS_BADGE: Record<string, string> = {
   todo: "bg-slate-100 text-slate-700 border-slate-200",
   in_progress: "bg-amber-50 text-amber-800 border-amber-200 font-semibold",
   done: "bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold",
-};
-
-const PRIORITY_BADGE: Record<TaskPriorityValue, string> = {
-  high: "bg-rose-50 text-rose-700 border-rose-200 font-bold",
-  medium: "bg-amber-50 text-amber-800 border-amber-200 font-medium",
-  low: "bg-slate-100 text-slate-600 border-slate-200",
-  none: "text-slate-400 border-transparent",
 };
 
 function statusLabel(status: string) {
@@ -213,7 +203,7 @@ export default function DashboardFilters({
         if (memberId !== null && task.assigned_to !== memberId) return false;
         if (status !== null && !matchesStatus(task, status, today)) return false;
         if (taskStatus !== null && task.status !== taskStatus) return false;
-        if (priority !== null && taskPriority(task, today).value !== priority) return false;
+        if (priority !== null && taskPriority(task).value !== priority) return false;
         if (category !== null && (task.category || "other") !== category) return false;
         if (client !== null && (task.client_name || "__internal") !== client) return false;
         if (deadline !== null && !matchesDeadline(task, deadline, today)) return false;
@@ -585,10 +575,11 @@ export default function DashboardFilters({
             onChange={(value) => setPriority((value || null) as TaskPriorityValue | null)}
           >
             <option value="">All priorities</option>
-            <option value="high">High (overdue)</option>
-            <option value="medium">Medium (due soon)</option>
-            <option value="low">Low</option>
-            <option value="none">No priority (done)</option>
+            {TASK_PRIORITIES.map((priority) => (
+              <option key={priority.value} value={priority.value}>
+                {priority.label}
+              </option>
+            ))}
           </FilterSelect>
 
           {isOwner && (
@@ -710,7 +701,6 @@ export default function DashboardFilters({
               <tbody className="divide-y divide-slate-100">
                 {filteredTasks.map((task) => {
                   const overdue = isTaskOverdue(task, today);
-                  const priority = taskPriority(task, today);
                   return (
                     <tr key={task.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="px-4 py-3 font-semibold text-slate-900">
@@ -739,11 +729,7 @@ export default function DashboardFilters({
                         {overdue ? " (Overdue)" : ""}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-block rounded-md border px-2 py-0.5 text-xs ${PRIORITY_BADGE[priority.value]}`}
-                        >
-                          {priority.label}
-                        </span>
+                        <TaskPriorityBadge priority={task.priority} />
                       </td>
                       <td className="px-4 py-3">
                         <span

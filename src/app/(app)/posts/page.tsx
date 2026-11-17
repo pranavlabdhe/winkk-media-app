@@ -2,7 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { taskCategoryLabel } from "@/lib/constants";
+import { taskCategoryLabel, taskPriorityLabel } from "@/lib/constants";
 import {
   ensureTaskForModule,
   linkModuleToTask,
@@ -10,6 +10,7 @@ import {
   syncModuleToTask,
 } from "@/lib/activity-service";
 import { clientVisibilityScope } from "@/lib/visibility";
+import TaskPriorityBadge from "@/components/task-priority-badge";
 
 const POST_STATUSES = ["scheduled", "published", "pending", "missed"] as const;
 type PostStatus = (typeof POST_STATUSES)[number];
@@ -24,6 +25,7 @@ type LinkableTask = {
   id: number;
   title: string;
   category: string | null;
+  priority: string | null;
   client_id: number | null;
   client_name: string | null;
 };
@@ -47,6 +49,7 @@ type PostWithLinks = PostRow & {
   linked_task_id: number | null;
   linked_task_title: string | null;
   linked_task_status: string | null;
+  linked_task_priority?: string | null;
   linked_task_due: string | null;
   linked_task_assignee: string | null;
 };
@@ -167,7 +170,7 @@ export default async function PostsPage({
   const clients = db.prepare("SELECT id,name FROM clients ORDER BY name").all() as ClientOption[];
   const linkableTasks = db
     .prepare(
-      `SELECT t.id,t.title,t.category,t.client_id,c.name client_name
+      `SELECT t.id,t.title,t.category,t.client_id,t.priority,c.name client_name
        FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
        WHERE t.id NOT IN (SELECT task_id FROM posts WHERE task_id IS NOT NULL)
        ORDER BY t.created_at DESC LIMIT 50`
@@ -193,6 +196,7 @@ export default async function PostsPage({
     .prepare(
       `SELECT p.*, c.name client_name,
               t.id linked_task_id, t.title linked_task_title, t.status linked_task_status,
+              t.priority linked_task_priority,
               t.due_date linked_task_due, u.name linked_task_assignee
        FROM posts p
        JOIN clients c ON c.id=p.client_id
@@ -465,7 +469,7 @@ export default async function PostsPage({
                 <option value="">Create new linked task automatically</option>
                 {linkableTasks.map((task) => (
                   <option key={task.id} value={task.id}>
-                    Link to #{task.id}: {task.title} · {task.client_name || "Internal"}
+                    Link to #{task.id}: {task.title} · {task.client_name || "Internal"} · {taskPriorityLabel(task.priority)} priority
                   </option>
                 ))}
               </select>
@@ -570,12 +574,15 @@ export default async function PostsPage({
                     <td className="px-4 py-3 max-w-[180px]">
                       {p.linked_task_id ? (
                         <div className="rounded-lg bg-slate-50 p-2 border border-slate-100 text-xs">
-                          <Link
-                            href={`/tasks?task=${p.linked_task_id}`}
-                            className="font-semibold text-[#12143d] hover:text-[#ed8527] transition-colors line-clamp-1"
-                          >
-                            #{p.linked_task_id} {p.linked_task_title}
-                          </Link>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Link
+                              href={`/tasks?task=${p.linked_task_id}`}
+                              className="font-semibold text-[#12143d] hover:text-[#ed8527] transition-colors line-clamp-1"
+                            >
+                              #{p.linked_task_id} {p.linked_task_title}
+                            </Link>
+                            <TaskPriorityBadge priority={p.linked_task_priority} />
+                          </div>
                           <div className="text-[11px] text-slate-500 mt-0.5">
                             {p.linked_task_assignee || "Unassigned"} · {p.linked_task_status}
                           </div>

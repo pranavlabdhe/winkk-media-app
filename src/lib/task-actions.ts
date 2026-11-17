@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import db from "./db";
 import { getSession } from "./auth";
-import { isTaskCategory, isTaskStatus } from "./constants";
+import { DEFAULT_TASK_PRIORITY, isTaskCategory, isTaskPriority, isTaskStatus, taskPriorityLabel } from "./constants";
 import {
   MODULE_LABELS,
   MODULE_TABLE,
@@ -54,6 +54,8 @@ export async function createTaskAction(formData: FormData) {
   const category = isTaskCategory(categoryRaw) ? categoryRaw : "other";
   const statusRaw = String(formData.get("status") || "todo");
   const status = isTaskStatus(statusRaw) ? statusRaw : "todo";
+  const priorityRaw = String(formData.get("priority") || DEFAULT_TASK_PRIORITY);
+  const priority = isTaskPriority(priorityRaw) ? priorityRaw : DEFAULT_TASK_PRIORITY;
   const bloggerRaw = formData.get("linked_blogger_id");
   const linkedBloggerId = bloggerRaw ? Number(bloggerRaw) || null : null;
   const activityAt = String(formData.get("activity_at") || "") || null;
@@ -61,8 +63,8 @@ export async function createTaskAction(formData: FormData) {
   const result = db
     .prepare(
       `INSERT INTO tasks
-        (title,description,client_id,assigned_to,assigned_by,status,category,due_date,origin_module,linked_blogger_id,activity_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+        (title,description,client_id,assigned_to,assigned_by,status,category,priority,due_date,origin_module,linked_blogger_id,activity_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       title,
@@ -72,6 +74,7 @@ export async function createTaskAction(formData: FormData) {
       session.id,
       status,
       category,
+      priority,
       String(formData.get("due_date") || "") || null,
       "tasks",
       linkedBloggerId,
@@ -133,12 +136,19 @@ export async function updateTaskAction(formData: FormData) {
   const categoryRaw =
     formData.get("category") !== null ? String(formData.get("category")) : current.category;
   const category = isTaskCategory(categoryRaw) ? categoryRaw : current.category;
+  const priorityRaw =
+    formData.get("priority") !== null ? String(formData.get("priority")) : current.priority;
+  const priority = isTaskPriority(priorityRaw)
+    ? priorityRaw
+    : isTaskPriority(current.priority)
+      ? current.priority
+      : DEFAULT_TASK_PRIORITY;
   const dueRaw = formData.get("due_date");
   const dueDate = dueRaw === null ? current.due_date : String(dueRaw) || null;
 
   db.prepare(
-    "UPDATE tasks SET status=?, assigned_to=?, category=?, due_date=?, updated_at=CURRENT_TIMESTAMP WHERE id=?"
-  ).run(status, assignedTo, category, dueDate, id);
+    "UPDATE tasks SET status=?, assigned_to=?, category=?, priority=?, due_date=?, updated_at=CURRENT_TIMESTAMP WHERE id=?"
+  ).run(status, assignedTo, category, priority, dueDate, id);
 
   const changes: string[] = [];
   if (status !== current.status) changes.push(`Status moved from ${current.status} to ${status}`);
@@ -148,6 +158,9 @@ export async function updateTaskAction(formData: FormData) {
   }
   if (dueDate !== current.due_date) changes.push(dueDate ? `Due date set to ${dueDate}` : "Due date cleared");
   if (category !== current.category) changes.push("Work category changed");
+  if (priority !== current.priority) {
+    changes.push(`Priority changed from ${taskPriorityLabel(current.priority)} to ${taskPriorityLabel(priority)}`);
+  }
 
   if (changes.length) {
     db.prepare("INSERT INTO task_updates (task_id,user_id,note) VALUES (?,?,?)").run(
