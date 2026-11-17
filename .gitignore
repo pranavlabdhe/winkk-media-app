@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+
+# local db
+data.sqlite
+data.sqlite-*
+
+# generated training media (recreate with npm run training:tasks / training:posts)
+/training/*/storyboard/
+/training/*/video/
+/training/*/*-storyboard.pdf

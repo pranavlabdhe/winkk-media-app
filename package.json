@@ -6,20 +6,32 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:demo": "node scripts/seed-demo-data.mjs",
+    "seed:demo:reset": "node scripts/seed-demo-data.mjs --reset",
+    "training:tasks": "node training/tasks/record-tasks.mjs",
+    "training:posts": "node training/posts/record-posts.mjs",
+    "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.2.0",
     "next": "16.4.6",
+    "prisma": "^6.19.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
+    "playwright-core": "^1.65.1",
     "tailwindcss": "4.3.3",
     "typescript": "^5"
   }

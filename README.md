@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Winkk Media Task Tracker
 
-## Getting Started
+A client-wise task and activity tracker for the Winkk Media team. Built with Next.js, TypeScript, Tailwind CSS, and SQLite.
 
-First, run the development server:
+## Recommended way to work
+
+1. **Every activity is a task.** Link each task to a client, a work category, an assignee, a due date, and a status (`To do`, `In progress`, `Done`).
+2. **Employees start from My Work.** It shows only their tasks, due dates, activity history, and the tasks they have assigned to teammates.
+3. **Owner starts from Dashboard.** It shows team workload, overdue tasks, posts needing attention, client feedback, communication delays, and upcoming meetings.
+4. **Use client teams.** Each client page lists the assigned team so everyone knows who owns that account.
+5. **Update as you go.** Change task status and add a short note. This creates a permanent activity history.
+6. **Review exceptions weekly.** Owner should review overdue tasks, missed posts, pending feedback, and delayed WhatsApp responses.
+
+## Seeded team accounts
+
+All seeded accounts use `password123` initially. Change passwords from **Team** after first login.
+
+| Person | Email | Role |
+|---|---|---|
+| Owner | `owner@winkk.media` | Owner |
+| Social Media Executive | `social@winkk.media` | Employee |
+| Designer 1 | `designer1@winkk.media` | Employee |
+| Designer 2 | `designer2@winkk.media` | Employee |
+| Marketing Strategist | `strategy@winkk.media` | Employee |
+
+Existing real accounts are preserved. Owners can rename seeded accounts, change job titles/departments, reset passwords, or deactivate accounts from **Team**.
+
+## Seeded clients
+
+- Solhaus
+- Grill Master
+- Rasraj
+
+The Social Media Executive and Marketing Strategist are initially assigned to all three clients. Designers can be assigned per client from each client page.
+
+## Demo data
+
+The app ships with a demo seeder that builds a fully connected dataset so you can try every workflow immediately. It is idempotent, so running it again does not create duplicates.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run seed:demo          # create the demo dataset
+npm run seed:demo:reset    # remove only the demo records
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The seeded scenario covers:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Task → modules:** a Solhaus Diwali reel task with a linked Instagram post and a client communication.
+- **Post → task:** a Solhaus festive carousel created in Social Posts with its own linked task.
+- **Task only:** an overdue Grill Master photoshoot assigned to a designer.
+- **Post → feedback + communication:** a published Grill Master menu post with client feedback and a weekly check-in thread.
+- **Blogger collaboration:** a StyleByNeha assignment linked to a blogger task.
+- **Meetings:** an upcoming Solhaus review and a completed Grill Master debrief, each with a follow-up task linked back to the meeting.
+- **Feedback on an existing post:** logo-size feedback on the Rasraj Christmas post, plus a related communication.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Every record is linked through the same task, so status, ownership, deadline, and activity appear in both the module page and the task board. Use the **Linked records** badges and **?task=** filters to jump between them, and open **Clients → Solhaus** or **Dashboard** to see the unified activity timeline.
 
-## Learn More
+## Modules
 
-To learn more about Next.js, take a look at the following resources:
+- **My Work** — personal task queue and activity updates
+- **Dashboard** — owner overview or employee personal summary
+- **Clients** — client hub with assigned team, tasks, posts, feedback, communication, bloggers, and meetings
+- **Tasks** — client-wise task board with category, assignee, due date, status, and activity history
+- **Social Posts** — scheduled, published, pending, and missed Instagram posts
+- **Feedback** — client feedback/reviews, action status, and update history
+- **Communications** — WhatsApp group response tracking and missed/delayed response visibility
+- **Bloggers** — blogger assignments, collaboration dates, and completion status
+- **Meetings** — owner’s client meeting calendar and discussion notes
+- **Team** — owner-only team management, workload, roles, job titles, departments, and account status
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Run locally
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install
+npm run dev
+```
 
-## Deploy on Vercel
+Open [http://localhost:3000](http://localhost:3000).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Data is stored in `data.sqlite` in the project root and is ignored by git.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Build
+
+```bash
+npm run build
+```
