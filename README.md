@@ -1,6 +1,6 @@
 # Winkk Media Task Tracker
 
-A client-wise task and activity tracker for the Winkk Media team. Built with Next.js, TypeScript, Tailwind CSS, and SQLite.
+A client-wise task and activity tracker for the Winkk Media team. Built with Next.js, TypeScript, Tailwind CSS, and SQLite/libSQL.
 
 ## Recommended way to work
 
@@ -83,3 +83,50 @@ Data is stored in `data.sqlite` in the project root and is ignored by git.
 ```bash
 npm run build
 ```
+
+## Deploy to Vercel (Turso)
+
+Vercel's filesystem is read-only and ephemeral, so production uses [Turso](https://turso.tech) (libSQL) instead of the local `data.sqlite` file. The app uses the same SQL and schema in both environments: it talks to `data.sqlite` locally and to Turso wherever `TURSO_DATABASE_URL` is set.
+
+1. Create a Turso database and copy its URL and auth token:
+
+   ```bash
+   turso auth signup        # opens the browser once
+   turso db create winkk-tracker
+   turso db show winkk-tracker --url
+   turso db tokens create winkk-tracker
+   ```
+
+2. Put the connection details in `.env.local` (never commit it):
+
+   ```bash
+   TURSO_DATABASE_URL=libsql://…
+   TURSO_AUTH_TOKEN=…
+   ```
+
+3. Copy the local data up to Turso. The script creates the schema if the remote database is empty, preserves ids, and checks row counts:
+
+   ```bash
+   npm run db:push-turso            # add -- --dry-run to only print counts
+   ```
+
+   Set `SEED_OWNER_PASSWORD` in the environment when running the script to replace the owner password at the same time, e.g. `SEED_OWNER_PASSWORD='…' npm run db:push-turso`. Without it the copied hash is kept, so the owner keeps the current password.
+
+4. Add these environment variables in **Vercel → Project → Settings → Environment Variables** (Production, Preview, and Development):
+
+   | Variable | Value |
+   |---|---|
+   | `TURSO_DATABASE_URL` | `libsql://…turso.io` |
+   | `TURSO_AUTH_TOKEN` | token from `turso db tokens create` |
+   | `SESSION_SECRET` | `openssl rand -base64 32` (required in production) |
+   | `SEED_OWNER_PASSWORD` | optional: password for the owner account if it is ever re-seeded |
+   | `SEED_DEMO_PASSWORD` | optional: password for the seeded demo employees |
+
+5. Deploy:
+
+   ```bash
+   npx vercel --prod
+   ```
+
+The app creates any missing tables automatically on first connection and seeds the team accounts and demo clients only when the database is empty, so a Turso database restored with `db:push-turso` starts with the real data.
+

@@ -1,0 +1,7 @@
+# Never upload local state to Vercel builds.
+data.sqlite
+data.sqlite-*
+.env*
+.vercel
+training/*/storyboard/
+training/*/video/

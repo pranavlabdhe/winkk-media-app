@@ -9,7 +9,7 @@
  * at least once first so the schema exists.
  */
 import path from "node:path";
-import Database from "better-sqlite3";
+import Database from "libsql";
 
 const db = new Database(path.join(process.cwd(), "data.sqlite"));
 db.pragma("journal_mode = WAL");

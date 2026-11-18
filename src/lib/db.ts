@@ -1,11 +1,38 @@
-import Database from "better-sqlite3";
+import Database from "libsql";
 import path from "path";
 import bcrypt from "bcryptjs";
 
 const dbPath = path.join(process.cwd(), "data.sqlite");
-const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+// In production the database lives in Turso (libSQL). Locally we keep using the
+// on-disk SQLite file so development works without network access.
+const remoteUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
+const authToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN;
+
+type LibsqlOptions = NonNullable<ConstructorParameters<typeof Database>[1]> & {
+  authToken?: string;
+};
+
+const db = remoteUrl
+  ? new Database(remoteUrl, (authToken ? { authToken } : undefined) as LibsqlOptions)
+  : new Database(dbPath);
+
+if (!remoteUrl) {
+  try {
+    // Several build/render workers can open this file at once; wait briefly for
+    // a concurrent checkpoint instead of failing the whole build.
+    db.pragma("busy_timeout = 5000");
+    db.pragma("journal_mode = WAL");
+  } catch {
+    // The database is already in WAL mode if another process got there first.
+  }
+}
+try {
+  db.pragma("busy_timeout = 5000");
+  db.pragma("foreign_keys = ON");
+} catch {
+  // Some remote libSQL connections reject PRAGMA statements; foreign keys are
+  // enforced server-side in that case.
+}
 
 function ensureColumn(table: string, column: string, definition: string) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -327,14 +354,22 @@ export function initDb() {
 
   migrateInteractions();
 
-  const passwordHash = bcrypt.hashSync("password123", 10);
+  const demoPasswordHash = bcrypt.hashSync(
+    process.env.SEED_DEMO_PASSWORD || "password123",
+    10
+  );
+  const ownerPasswordHash = bcrypt.hashSync(
+    process.env.SEED_OWNER_PASSWORD || process.env.SEED_DEMO_PASSWORD || "password123",
+    10
+  );
 
   function seedUser(
     name: string,
     email: string,
     role: "owner" | "employee",
     jobTitle: string,
-    department: string
+    department: string,
+    passwordHash = demoPasswordHash
   ) {
     const existing = db.prepare("SELECT id FROM users WHERE email=?").get(email) as any;
     if (!existing) {
@@ -348,7 +383,7 @@ export function initDb() {
     }
   }
 
-  seedUser("Owner", "owner@winkk.media", "owner", "Owner", "management");
+  seedUser("Owner", "owner@winkk.media", "owner", "Owner", "management", ownerPasswordHash);
   seedUser(
     "Social Media Executive",
     "social@winkk.media",

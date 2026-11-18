@@ -20,6 +20,9 @@ export default async function LoginPage({
   const session = await getSession();
   if (session) redirect(session.role === "owner" ? "/dashboard" : "/my-work");
   const { error } = await searchParams;
+  // Pre-filled demo credentials are a development convenience only; a deployed
+  // workspace must never offer an account to every visitor.
+  const showDemoCredentials = process.env.NODE_ENV !== "production";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-radial from-slate-100 to-slate-200/80 p-4 sm:p-6">
@@ -64,7 +67,7 @@ export default async function LoginPage({
               required
               autoComplete="email"
               className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-2xs transition-all focus:border-[#ed8527] focus:outline-none focus:ring-3 focus:ring-[#ed8527]/20"
-              defaultValue="owner@winkk.media"
+              defaultValue={showDemoCredentials ? "owner@winkk.media" : undefined}
               placeholder="e.g. name@winkk.media"
             />
           </div>
@@ -81,7 +84,7 @@ export default async function LoginPage({
               required
               autoComplete="current-password"
               className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-2xs transition-all focus:border-[#ed8527] focus:outline-none focus:ring-3 focus:ring-[#ed8527]/20"
-              defaultValue="password123"
+              defaultValue={showDemoCredentials ? "password123" : undefined}
               placeholder="••••••••"
             />
           </div>
@@ -94,11 +97,13 @@ export default async function LoginPage({
           </button>
         </form>
 
-        <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-          <p className="text-[11px] font-medium text-slate-400">
-            Demo Credentials: <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">owner@winkk.media</code> / <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">password123</code>
-          </p>
-        </div>
+        {showDemoCredentials ? (
+          <div className="mt-6 border-t border-slate-100 pt-4 text-center">
+            <p className="text-[11px] font-medium text-slate-400">
+              Demo Credentials: <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">owner@winkk.media</code> / <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-600">password123</code>
+            </p>
+          </div>
+        ) : null}
       </div>
     </main>
   );
