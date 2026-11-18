@@ -29,23 +29,30 @@ function failurePath(base: string, message: string, extra?: Record<string, strin
 function parseFeedbackDrafts(formData: FormData): FeedbackDraft[] {
   const indexes = new Set<string>();
   for (const key of formData.keys()) {
-    const match = /^feedback\.(\d+)\./.exec(key);
+    // The current form uses underscore names (feedback_0_title); also accept
+    // the earlier dotted format so an open form from an older build can submit.
+    const match = /^feedback[._](\d+)[._](?:title|description|category|sentiment|priority|action_required|assigned_to|due_date|create_task)$/.exec(key);
     if (match) indexes.add(match[1]);
   }
   return [...indexes]
     .sort((a, b) => Number(a) - Number(b))
     .map((index) => {
-      const get = (field: string) => String(formData.get(`feedback.${index}.${field}`) || "");
+      const get = (field: string) =>
+        String(
+          formData.get(`feedback_${index}_${field}`) ??
+            formData.get(`feedback.${index}.${field}`) ??
+            ""
+        );
       return {
         title: get("title"),
         description: get("description"),
         category: get("category"),
         sentiment: get("sentiment"),
         priority: get("priority"),
-        actionRequired: formData.get(`feedback.${index}.action_required`) === "on",
+        actionRequired: get("action_required") === "on",
         assignedTo: get("assigned_to") ? Number(get("assigned_to")) : null,
         dueDate: get("due_date") || null,
-        createTask: formData.get(`feedback.${index}.create_task`) === "on",
+        createTask: get("create_task") === "on",
       } satisfies FeedbackDraft;
     });
 }
