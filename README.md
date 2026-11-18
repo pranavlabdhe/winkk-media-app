@@ -104,11 +104,13 @@ Vercel's filesystem is read-only and ephemeral, so production uses [Turso](https
    TURSO_AUTH_TOKEN=…
    ```
 
-3. Copy the local data up to Turso. The script creates the schema if the remote database is empty, preserves ids, and checks row counts:
+3. Copy the local data up to Turso:
 
    ```bash
-   npm run db:push-turso            # add -- --dry-run to only print counts
+   npm run db:push-turso              # add -- --dry-run to only print counts
    ```
+
+   The script in `scripts/push-to-turso.mjs` creates the schema when the remote database is empty, copies every table from `data.sqlite` (ids preserved), and checks the row counts. If Turso already holds different data it stops instead of overwriting the live workspace; add `--force` only when you really mean to replace production with the local copy.
 
    Set `SEED_OWNER_PASSWORD` in the environment when running the script to replace the owner password at the same time, e.g. `SEED_OWNER_PASSWORD='…' npm run db:push-turso`. Without it the copied hash is kept, so the owner keeps the current password.
 

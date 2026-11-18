@@ -35,6 +35,7 @@ for (const file of [".env.local", ".env.turso.local", ".env"]) {
 }
 
 const dryRun = process.argv.includes("--dry-run");
+const force = process.argv.includes("--force");
 
 const localPath = path.join(process.cwd(), "data.sqlite");
 const remoteUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
@@ -143,6 +144,8 @@ for (const table of TABLES) {
   counts.set(table, Number(c));
 }
 
+const remoteUserCount = Number(remote.prepare("SELECT COUNT(*) c FROM users").get().c);
+
 console.log("\nLocal row counts:");
 for (const table of TABLES) {
   console.log(`  ${table.padEnd(20)} ${counts.get(table)}`);
@@ -151,6 +154,27 @@ for (const table of TABLES) {
 if (dryRun) {
   console.log("\nDry run only — nothing was written to Turso.");
   process.exit(0);
+}
+
+// Refuse to overwrite a production database that has moved on since the last
+// copy: the deployed app writes to Turso, so local data is usually the older
+// side. An explicit --force is required to continue.
+const drifted = [];
+for (const table of TABLES) {
+  const { c } = remote.prepare(`SELECT COUNT(*) c FROM ${quote(table)}`).get();
+  if (Number(c) !== counts.get(table)) drifted.push(`${table} (Turso ${Number(c)} / local ${counts.get(table)})`);
+}
+if (remoteUserCount > 0 && drifted.length && !force) {
+  fail(
+    [
+      "Turso already holds different data, so it looks like the live app has moved on:",
+      ...drifted.map((line) => `  • ${line}`),
+      "",
+      "This script would replace every remote row with the local copy.",
+      "Run again with --force only if you really want to overwrite production,",
+      "or edit data.sqlite / Turso first so the counts match.",
+    ].join("\n")
+  );
 }
 
 function insertRows(table) {
