@@ -7,7 +7,7 @@ async function loginAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
   const user = verifyLogin(email, password);
-  if (!user) redirect("/login?error=1");
+  if (!user) redirect(`/login?error=1&email=${encodeURIComponent(email)}`);
   await setSession(user);
   redirect(user.role === "owner" ? "/dashboard" : "/my-work");
 }
@@ -15,14 +15,15 @@ async function loginAction(formData: FormData) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; email?: string }>;
 }) {
   const session = await getSession();
   if (session) redirect(session.role === "owner" ? "/dashboard" : "/my-work");
-  const { error } = await searchParams;
+  const { error, email } = await searchParams;
   // Pre-filled demo credentials are a development convenience only; a deployed
   // workspace must never offer an account to every visitor.
   const showDemoCredentials = process.env.NODE_ENV !== "production";
+  const defaultEmail = email || (showDemoCredentials ? "owner@winkk.media" : undefined);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-radial from-slate-100 to-slate-200/80 p-4 sm:p-6">
@@ -67,7 +68,7 @@ export default async function LoginPage({
               required
               autoComplete="email"
               className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-2xs transition-all focus:border-[#ed8527] focus:outline-none focus:ring-3 focus:ring-[#ed8527]/20"
-              defaultValue={showDemoCredentials ? "owner@winkk.media" : undefined}
+              defaultValue={defaultEmail}
               placeholder="e.g. name@winkk.media"
             />
           </div>
